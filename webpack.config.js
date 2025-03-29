@@ -9,8 +9,8 @@ module.exports = (env, argv) => {
     entry: './client/src/core/game.js',
     output: {
       filename: 'bundle.js',
-      path: path.resolve(__dirname, 'client'),
-      clean: false,
+      path: path.resolve(__dirname, 'dist'),
+      clean: true,
       publicPath: isProduction ? './' : '/'
     },
     module: {
