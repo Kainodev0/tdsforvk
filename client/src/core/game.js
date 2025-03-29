@@ -7,6 +7,8 @@ import { NetworkManager } from './network.js';
 import { Player } from '../entities/player.js';
 import { HUD } from '../ui/hud.js';
 import { InventoryUI } from '../ui/inventory.js';
+import { PhysicsManager } from '../physics/physics-manager.js';
+import { VisionSystem } from '../physics/vision-system.js';
 
 /**
  * Основной класс игры, управляющий всеми компонентами
@@ -28,6 +30,7 @@ class Game {
         this.renderer = new Renderer(this.gameCanvas);
         this.input = new InputHandler();
         this.network = new NetworkManager();
+        this.physics = new PhysicsManager();
         
         // Состояние игры
         this.player = null;
@@ -67,6 +70,12 @@ class Game {
      * Загрузка игровых ресурсов
      */
     async loadResources() {
+        // Инициализируем физику
+        const physicsInitialized = await this.physics.init();
+        if (!physicsInitialized) {
+            console.error('Не удалось инициализировать физику');
+        }
+        
         // В реальной игре здесь будет загрузка моделей, текстур и т.д.
         return new Promise(resolve => {
             // Имитация загрузки (в реальной игре здесь будет загрузка assets)
@@ -101,7 +110,7 @@ class Game {
             }
         });
         
-        // Обработчик ESC для пауы
+        // Обработчик ESC для паузы
         this.input.addKeyCallback('Escape', () => {
             if (this.currentScene === 'game') {
                 this.togglePause();
@@ -150,6 +159,9 @@ class Game {
         // Инициализация сцены
         this.renderer.setupScene();
         
+        // Создание тестовых стен для демонстрации системы видимости
+        this.createTestWalls();
+        
         // Создание игрока
         this.player = new Player({
             position: { x: 0, y: 0, z: 0 },
@@ -157,6 +169,9 @@ class Game {
             input: this.input,
             game: this
         });
+        
+        // Инициализация системы видимости
+        this.initVisionSystem();
         
         // Подключение к серверу (в прототипе локально)
         this.network.connect().then(() => {
@@ -168,7 +183,92 @@ class Game {
         });
         
         // Запуск игрового цикла
+        this.lastFrameTime = performance.now();
         requestAnimationFrame(this.update);
+    }
+    
+    /**
+     * Метод для инициализации системы видимости
+     */
+    initVisionSystem() {
+        if (!this.renderer || !this.renderer.scene || !this.player) return;
+        
+        // Создаем систему видимости
+        const visionSystem = new VisionSystem({
+            scene: this.renderer.scene,
+            world: this.physics.getWorld(),
+            player: this.player,
+            fov: 90, // Начальный угол обзора
+            rayCount: 60, // Количество лучей
+            maxDistance: 50, // Максимальная дистанция видимости
+            memoryEnabled: true, // Запоминать посещенные области
+            blurEdges: true // Размытие краев видимости
+        });
+        
+        // Сохраняем систему видимости в рендерере
+        this.renderer.visionSystem = visionSystem;
+        
+        console.log('Система видимости инициализирована');
+    }
+    
+    /**
+     * Метод для создания тестовых стен
+     */
+    createTestWalls() {
+        if (!this.physics || !this.physics.isReady() || !this.renderer || !this.renderer.scene) {
+            console.error('Физика или рендерер не готовы для создания стен');
+            return;
+        }
+        
+        // Создаем материал для стен
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080,
+            roughness: 0.7,
+            metalness: 0.2
+        });
+        
+        // Функция для создания стены
+        const createWall = (x, z, width, depth, height = 3) => {
+            // Создаем геометрию
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const mesh = new THREE.Mesh(geometry, wallMaterial);
+            
+            // Устанавливаем позицию
+            mesh.position.set(x, height / 2, z);
+            
+            // Добавляем на сцену
+            this.renderer.scene.add(mesh);
+            
+            // Создаем физический коллайдер
+            this.physics.createObstacle({
+                position: { x, y: height / 2, z },
+                size: { x: width, y: height, z: depth },
+                object: mesh
+            });
+            
+            return mesh;
+        };
+        
+        // Создаем стены лабиринта
+        // Горизонтальные стены
+        createWall(0, -20, 40, 1);
+        createWall(-20, 0, 1, 40);
+        createWall(20, 0, 1, 40);
+        createWall(0, 20, 40, 1);
+        
+        // Внутренние стены
+        createWall(-10, -10, 1, 20);
+        createWall(10, 10, 20, 1);
+        createWall(10, -5, 1, 10);
+        createWall(-5, 5, 10, 1);
+        
+        // Препятствия
+        createWall(-15, -15, 3, 3);
+        createWall(15, -15, 3, 3);
+        createWall(15, 15, 3, 3);
+        createWall(-15, 15, 3, 3);
+        
+        console.log('Тестовые стены созданы');
     }
     
     /**
@@ -214,7 +314,7 @@ class Game {
      */
     fixedUpdate(deltaTime) {
         // Обновляем физику на стороне сервера (в прототипе не используется)
-        if (this.network && this.network.isConnected()) {
+        if (this.network && this.network.isConnected) {
             // Отправка состояния на сервер
         }
         
@@ -244,9 +344,14 @@ class Game {
         // Увеличиваем игровое время
         this.gameTime += clampedDeltaTime;
         
-        // Обновление физики с фиксированным шагом (для стабильности)
+        // Обновление физики с фиксированным шагом
         this.physicsAccumulator += clampedDeltaTime;
         while (this.physicsAccumulator >= this.physicsUpdateRate) {
+            // Обновляем физический мир
+            if (this.physics) {
+                this.physics.update(this.physicsUpdateRate);
+            }
+            
             this.fixedUpdate(this.physicsUpdateRate);
             this.physicsAccumulator -= this.physicsUpdateRate;
         }
@@ -340,6 +445,18 @@ class Game {
         
         // Очистка ресурсов
         this.entities = [];
+        
+        // Удаляем систему видимости
+        if (this.renderer && this.renderer.visionSystem) {
+            this.renderer.visionSystem.dispose();
+            this.renderer.visionSystem = null;
+        }
+        
+        // Очищаем физику
+        if (this.physics) {
+            this.physics.dispose();
+        }
+        
         if (this.player) {
             this.player = null;
         }
