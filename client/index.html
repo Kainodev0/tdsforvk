@@ -6,19 +6,34 @@
     <title>TDS Escape - Прототип</title>
     <link rel="stylesheet" href="styles.css">
     
-    <!-- Подключение Three.js с полным URL -->
+    <!-- Three.js и другие библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r133/three.min.js"></script>
-    
-    <!-- Подключение GLTFLoader для загрузки моделей с полным URL -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.min.js"></script>
     
-    <!-- Подключение Rapier.js с полным URL и с колбэком инициализации -->
-    <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.min.js" 
-            onload="console.log('Rapier.js загружен')">
+    <!-- Для отладки -->
+    <script>
+        window.DEBUG = true;
+        window.debugLog = function(component, message) {
+            console.log(`[${component}] ${message}`);
+        };
+        
+        // Проверка загрузки библиотек
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM загружен');
+            if (typeof THREE !== 'undefined') {
+                console.log('Three.js загружен успешно');
+            } else {
+                console.error('Three.js не загружен!');
+            }
+            
+            if (typeof RAPIER !== 'undefined') {
+                console.log('Rapier.js загружен успешно');
+            } else {
+                console.error('Rapier.js не загружен!');
+            }
+        });
     </script>
-    
-    <!-- VK Bridge для интеграции с ВКонтакте (если нужно) -->
-    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 </head>
 <body>
     <div id="game-container">
@@ -26,6 +41,8 @@
             <div class="loader"></div>
             <div class="loading-text">Загрузка игры...</div>
             <div id="loading-status">Инициализация...</div>
+            <!-- Кнопка для начала игры, если автозапуск не работает -->
+            <button id="manual-start" class="start-button">Запустить игру вручную</button>
         </div>
         <div id="main-menu" class="hidden">
             <h1>TDS Escape</h1>
@@ -42,90 +59,53 @@
             <div id="weapon-info"></div>
             <div id="status-messages"></div>
         </div>
-        <div id="inventory-screen" class="hidden">
-            <div class="inventory-title">Инвентарь</div>
-            <div class="inventory-grid"></div>
-            <div class="equipped-items"></div>
-            <button id="close-inventory">Закрыть</button>
-        </div>
-        <div id="debug-panel" class="hidden">
-            <h3>Debug Panel</h3>
-            <div id="debug-info"></div>
-            <button id="close-debug">Close</button>
-        </div>
     </div>
     
-    <!-- Debug-режим для простой отладки компонентов -->
+    <!-- Скрипт для ручного запуска -->
     <script>
-        window.DEBUG = true;
-        window.debugLog = function(component, message) {
-            if (window.DEBUG) {
-                console.log(`[${component}] ${message}`);
-                
-                // Обновляем статус загрузки, если присутствует элемент
-                const statusElement = document.getElementById('loading-status');
-                if (statusElement) {
-                    statusElement.textContent = message;
-                }
-                
-                // Обновляем debug-панель, если она активна
-                const debugElement = document.getElementById('debug-info');
-                if (debugElement) {
-                    const entry = document.createElement('div');
-                    entry.textContent = `[${component}] ${message}`;
-                    debugElement.appendChild(entry);
-                    
-                    // Ограничиваем количество сообщений
-                    if (debugElement.children.length > 20) {
-                        debugElement.removeChild(debugElement.firstChild);
-                    }
-                }
-            }
-        };
-        
-        // Функция отображения debug-панели
-        window.showDebugPanel = function() {
-            const debugPanel = document.getElementById('debug-panel');
-            if (debugPanel) {
-                debugPanel.classList.remove('hidden');
-            }
-        };
-        
-        // Вспомогательная функция для проверки загрузки внешних скриптов
-        window.checkScriptLoaded = function(libraryName, globalObj) {
-            if (typeof globalObj !== 'undefined') {
-                window.debugLog('ScriptLoader', `${libraryName} успешно загружен`);
-                return true;
+        document.getElementById('manual-start').addEventListener('click', function() {
+            console.log('Ручной запуск игры');
+            
+            // Скрываем экран загрузки и показываем меню
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            
+            // Если объект игры уже создан, пытаемся запустить
+            if (window.game && typeof window.game.startGame === 'function') {
+                window.game.startGame();
             } else {
-                window.debugLog('ScriptLoader', `Ошибка загрузки ${libraryName}`);
-                return false;
+                console.log('Объект игры не найден или не инициализирован');
+                
+                // Пытаемся загрузить скрипт напрямую
+                var script = document.createElement('script');
+                script.src = 'bundle.js';
+                script.type = 'text/javascript';
+                script.onload = function() {
+                    console.log('Скрипт игры загружен');
+                };
+                script.onerror = function() {
+                    console.error('Ошибка загрузки скрипта игры');
+                };
+                document.body.appendChild(script);
             }
-        };
+        });
         
-        // Проверяем, загружены ли библиотеки
-        document.addEventListener('DOMContentLoaded', function() {
-            window.debugLog('Loader', 'DOM полностью загружен');
-            window.checkScriptLoaded('Three.js', THREE);
-            window.checkScriptLoaded('Rapier.js', RAPIER);
+        // Автоматический запуск игры после загрузки
+        window.addEventListener('load', function() {
+            console.log('Страница полностью загружена');
             
-            // Настройка кнопки закрытия debug-панели
-            const closeDebugBtn = document.getElementById('close-debug');
-            if (closeDebugBtn) {
-                closeDebugBtn.addEventListener('click', function() {
-                    document.getElementById('debug-panel').classList.add('hidden');
-                });
-            }
-            
-            // Показываем панель отладки при нажатии Ctrl+Shift+D
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
-                    window.showDebugPanel();
+            // Отложенная инициализация для надежности
+            setTimeout(function() {
+                // Если объект игры еще не создан, загружаем скрипт напрямую
+                if (!window.game) {
+                    console.log('Автоматическая загрузка скрипта игры');
+                    var script = document.createElement('script');
+                    script.src = 'bundle.js';
+                    script.type = 'text/javascript';
+                    document.body.appendChild(script);
                 }
-            });
+            }, 1000);
         });
     </script>
-    
-    <!-- Загрузка основного модуля -->
-    <script type="module" src="./src/core/game.js"></script>
 </body>
 </html>

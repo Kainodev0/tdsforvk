@@ -4,6 +4,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
+  const publicPath = isProduction ? '/tdsforvk/' : '/';
   
   return {
     entry: './client/src/core/game.js',
@@ -11,7 +12,7 @@ module.exports = (env, argv) => {
       filename: 'bundle.js',
       path: path.resolve(__dirname, 'dist'),
       clean: true,
-      publicPath: isProduction ? './' : '/'
+      publicPath: publicPath
     },
     module: {
       rules: [
@@ -21,7 +22,12 @@ module.exports = (env, argv) => {
           use: {
             loader: 'babel-loader',
             options: {
-              presets: ['@babel/preset-env']
+              presets: ['@babel/preset-env'],
+              plugins: [
+                ["@babel/plugin-transform-modules-commonjs", { 
+                  "allowTopLevelThis": true 
+                }]
+              ]
             }
           }
         },
@@ -34,7 +40,8 @@ module.exports = (env, argv) => {
     plugins: [
       new HtmlWebpackPlugin({
         template: './client/index.html',
-        filename: 'index.html'
+        filename: 'index.html',
+        inject: 'body' // Важно: скрипт должен быть в body
       }),
       new CopyWebpackPlugin({
         patterns: [
@@ -43,6 +50,16 @@ module.exports = (env, argv) => {
         ]
       })
     ],
+    resolve: {
+      extensions: ['.js'],
+      // Указываем псевдонимы для импортов
+      alias: {
+        '@core': path.resolve(__dirname, 'client/src/core/'),
+        '@entities': path.resolve(__dirname, 'client/src/entities/'),
+        '@ui': path.resolve(__dirname, 'client/src/ui/'),
+        '@physics': path.resolve(__dirname, 'client/src/physics/')
+      }
+    },
     devServer: {
       static: {
         directory: path.resolve(__dirname, 'client')
@@ -51,9 +68,8 @@ module.exports = (env, argv) => {
       port: 8080,
       hot: true
     },
-    resolve: {
-      extensions: ['.js']
-    },
+    // Добавляем source maps для отладки
+    devtool: isProduction ? 'source-map' : 'eval-source-map',
     mode: isProduction ? 'production' : 'development'
   };
 };
