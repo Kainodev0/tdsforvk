@@ -197,7 +197,7 @@ export class Renderer {
         const coneMaterial = new THREE.MeshBasicMaterial({
             color: 0xffff00,
             transparent: true,
-            opacity: 0.2,
+            opacity: 0.1, // Очень низкая непрозрачность
             side: THREE.DoubleSide
         });
         
@@ -525,3 +525,156 @@ export class Renderer {
         
         return playerMesh;
     }
+    
+    /**
+     * Обновление камеры для следования за игроком
+     * @param {Object} playerPosition - текущая позиция игрока
+     */
+    updateCamera(playerPosition) {
+        if (!this.camera) return;
+        
+        // Устанавливаем позицию камеры над игроком
+        this.camera.position.x = playerPosition.x;
+        this.camera.position.z = playerPosition.z + 30; // Немного сзади
+        
+        // Направляем камеру на игрока
+        this.camera.lookAt(playerPosition.x, playerPosition.y, playerPosition.z);
+    }
+    
+    /**
+     * Обновление трансформации объекта
+     * @param {THREE.Object3D} object - объект для обновления
+     * @param {Object} position - новая позиция
+     * @param {Object} rotation - новое вращение
+     */
+    updateObjectTransform(object, position, rotation) {
+        if (!object) return;
+        
+        // Обновляем позицию
+        if (position) {
+            object.position.x = position.x;
+            object.position.y = position.y;
+            object.position.z = position.z;
+        }
+        
+        // Обновляем вращение
+        if (rotation) {
+            object.rotation.y = rotation.y;
+        }
+    }
+    
+    /**
+     * Рендеринг сцены с учетом игрока
+     * @param {Object} player - объект игрока для системы видимости
+     */
+    render(player) {
+        if (!this.renderer || !this.scene || !this.camera) return;
+        
+        // Обновляем систему видимости, если есть игрок
+        if (player) {
+            const viewDirection = player.getViewDirection();
+            const viewAngle = player.getViewAngle();
+            const viewDistance = player.getViewDistance();
+            
+            // Обновляем конус видимости
+            this.updateVisibilityCone(player.position, viewDirection, viewAngle);
+            
+            // Обновляем туман войны
+            this.updateFogOfWar(player.position, viewDirection, viewAngle, viewDistance);
+        }
+        
+        // Очищаем устаревшие временные объекты
+        this.cleanTemporaryObjects();
+        
+        // Рендерим сцену
+        this.renderer.render(this.scene, this.camera);
+    }
+    
+    /**
+     * Установка качества графики
+     * @param {string} quality - уровень качества ('low', 'medium', 'high')
+     */
+    setQuality(quality) {
+        if (!this.renderer) return;
+        
+        switch (quality) {
+            case 'low':
+                this.renderer.setPixelRatio(1);
+                this.renderer.shadowMap.enabled = false;
+                break;
+            case 'medium':
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFShadowMap;
+                break;
+            case 'high':
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                break;
+        }
+    }
+    
+    /**
+     * Добавление предмета на сцену
+     * @param {Object} itemData - данные предмета
+     * @returns {THREE.Object3D} - объект предмета
+     */
+    addItem(itemData) {
+        // Создаем упрощенную модель предмета (в зависимости от типа)
+        let geometry, material;
+        
+        switch (itemData.type) {
+            case 'weapon':
+                geometry = new THREE.BoxGeometry(0.8, 0.3, 0.2);
+                material = new THREE.MeshStandardMaterial({ color: 0xFF5722 });
+                break;
+            case 'medkit':
+                geometry = new THREE.BoxGeometry(0.5, 0.3, 0.5);
+                material = new THREE.MeshStandardMaterial({ color: 0x4CAF50 });
+                break;
+            case 'ammo':
+                geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+                material = new THREE.MeshStandardMaterial({ color: 0xFFC107 });
+                break;
+            default:
+                geometry = new THREE.SphereGeometry(0.3, 8, 8);
+                material = new THREE.MeshStandardMaterial({ color: 0xCCCCCC });
+        }
+        
+        // Создаем меш
+        const itemMesh = new THREE.Mesh(geometry, material);
+        itemMesh.position.copy(itemData.position);
+        itemMesh.position.y = 0.2; // Чуть выше земли
+        itemMesh.castShadow = true;
+        itemMesh.receiveShadow = true;
+        
+        // Добавляем на сцену
+        this.scene.add(itemMesh);
+        
+        return itemMesh;
+    }
+    
+    /**
+     * Добавление NPC на сцену
+     * @param {Object} npcData - данные NPC
+     * @returns {THREE.Object3D} - объект NPC
+     */
+    addNPC(npcData) {
+        // Создаем модель NPC (цилиндр)
+        const geometry = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 8);
+        const material = new THREE.MeshStandardMaterial({
+            color: npcData.type === 'enemy' ? 0xFF0000 : 0x00FF00,
+            roughness: 0.7
+        });
+        
+        const npcMesh = new THREE.Mesh(geometry, material);
+        npcMesh.position.copy(npcData.position);
+        npcMesh.castShadow = true;
+        npcMesh.receiveShadow = true;
+        
+        this.scene.add(npcMesh);
+        
+        return npcMesh;
+    }
+}
