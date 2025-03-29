@@ -1,3 +1,5 @@
+// client/src/core/input.js
+
 /**
  * Класс обработки пользовательского ввода
  */
@@ -19,15 +21,18 @@ export class InputHandler {
         // Колбэки для клавиш
         this.keyCallbacks = {};
         
-        // Колбэк для клика мыши
+        // Колбэки для мыши
         this.clickCallback = null;
         this.rightClickCallback = null;
-        
-        // Колбэк для движения мыши
         this.mouseMoveCallback = null;
+        this.mouseDownCallback = null;
+        this.mouseUpCallback = null;
         
         // Флаг активных игровых управлений
         this.gameControlsEnabled = true;
+        
+        // Настройки ввода
+        this.mouseSensitivity = 1.0;
         
         // Привязка методов к контексту
         this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -91,9 +96,9 @@ export class InputHandler {
         this.mouse.position.x = event.clientX;
         this.mouse.position.y = event.clientY;
         
-        // Вычисляем delta движения
-        const deltaX = this.mouse.position.x - this.lastMousePosition.x;
-        const deltaY = this.mouse.position.y - this.lastMousePosition.y;
+        // Вычисляем delta движения с учетом чувствительности
+        const deltaX = (this.mouse.position.x - this.lastMousePosition.x) * this.mouseSensitivity;
+        const deltaY = (this.mouse.position.y - this.lastMousePosition.y) * this.mouseSensitivity;
         
         // Обновляем последнюю позицию
         this.lastMousePosition.x = this.mouse.position.x;
@@ -114,7 +119,12 @@ export class InputHandler {
             // Левая кнопка мыши
             this.mouse.isDown = true;
             
-            // Вызываем колбэк, если он установлен
+            // Вызываем общий колбэк нажатия
+            if (this.mouseDownCallback && this.gameControlsEnabled) {
+                this.mouseDownCallback(0, this.mouse.position);
+            }
+            
+            // Вызываем колбэк левого клика
             if (this.clickCallback && this.gameControlsEnabled) {
                 this.clickCallback(this.mouse.position);
             }
@@ -122,7 +132,12 @@ export class InputHandler {
             // Правая кнопка мыши
             this.mouse.rightIsDown = true;
             
-            // Вызываем колбэк, если он установлен
+            // Вызываем общий колбэк нажатия
+            if (this.mouseDownCallback && this.gameControlsEnabled) {
+                this.mouseDownCallback(2, this.mouse.position);
+            }
+            
+            // Вызываем колбэк правого клика
             if (this.rightClickCallback && this.gameControlsEnabled) {
                 this.rightClickCallback(this.mouse.position);
             }
@@ -136,8 +151,18 @@ export class InputHandler {
     handleMouseUp(event) {
         if (event.button === 0) {
             this.mouse.isDown = false;
+            
+            // Вызываем колбэк отпускания
+            if (this.mouseUpCallback && this.gameControlsEnabled) {
+                this.mouseUpCallback(0);
+            }
         } else if (event.button === 2) {
             this.mouse.rightIsDown = false;
+            
+            // Вызываем колбэк отпускания
+            if (this.mouseUpCallback && this.gameControlsEnabled) {
+                this.mouseUpCallback(2);
+            }
         }
     }
     
@@ -184,6 +209,14 @@ export class InputHandler {
     }
     
     /**
+     * Установка чувствительности мыши
+     * @param {number} sensitivity - чувствительность мыши
+     */
+    setMouseSensitivity(sensitivity) {
+        this.mouseSensitivity = sensitivity;
+    }
+    
+    /**
      * Добавление колбэка для клавиши
      * @param {string} code - код клавиши
      * @param {Function} callback - функция обратного вызова
@@ -222,6 +255,22 @@ export class InputHandler {
      */
     setMouseMoveCallback(callback) {
         this.mouseMoveCallback = callback;
+    }
+    
+    /**
+     * Установка колбэка для нажатия кнопки мыши
+     * @param {Function} callback - функция обратного вызова (button, position)
+     */
+    setMouseDownCallback(callback) {
+        this.mouseDownCallback = callback;
+    }
+    
+    /**
+     * Установка колбэка для отпускания кнопки мыши
+     * @param {Function} callback - функция обратного вызова (button)
+     */
+    setMouseUpCallback(callback) {
+        this.mouseUpCallback = callback;
     }
     
     /**
@@ -275,6 +324,8 @@ export class InputHandler {
         this.clickCallback = null;
         this.rightClickCallback = null;
         this.mouseMoveCallback = null;
+        this.mouseDownCallback = null;
+        this.mouseUpCallback = null;
     }
     
     /**

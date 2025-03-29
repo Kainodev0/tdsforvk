@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="styles.css">
     <!-- Подключение Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Подключение GLTFLoader для загрузки моделей -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
     <!-- Подключение Rapier.js для физики -->
     <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d@0.11.2/rapier3d.min.js"></script>
     <!-- VK Bridge для интеграции с ВКонтакте -->
@@ -41,6 +43,6 @@
         </div>
     </div>
     
-    <script type="module" src="src/core/game.js"></script>
+    <!-- Скрипт будет загружен webpack-ом -->
 </body>
 </html>

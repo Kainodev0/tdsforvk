@@ -8,6 +8,7 @@
       "dev:client": "webpack serve --mode development",
       "dev:server": "nodemon server/src/server.js",
       "build": "webpack --mode production",
+      "predeploy": "npm run build",
       "deploy": "gh-pages -d client",
       "lint": "eslint ."
     },
@@ -43,5 +44,6 @@
       "webpack": "^5.51.1",
       "webpack-cli": "^4.8.0",
       "webpack-dev-server": "^4.0.0"
-    }
+    },
+    "homepage": "https://yourusername.github.io/tds-escape"
   }

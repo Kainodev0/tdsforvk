@@ -1,3 +1,5 @@
+// client/src/core/renderer.js
+
 /**
  * Класс отвечающий за рендеринг игры с использованием Three.js
  */
@@ -13,6 +15,11 @@ export class Renderer {
         this.lights = [];
         this.models = {}; // Хранилище для загруженных моделей
         this.textures = {}; // Хранилище для загруженных текстур
+        
+        // Элементы для системы видимости
+        this.visibilitySystem = null;
+        this.fogOfWarSystem = null;
+        this.temporaryObjects = []; // Временные объекты (лучи, эффекты)
     }
 
     /**
@@ -26,9 +33,8 @@ export class Renderer {
         // Создание камеры (перспективная, вид сверху)
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        this.camera.position.set(0, 15, 0); // Позиция над землей
-        this.camera.lookAt(0, 0, 0); // Направлена вниз на игрока
-        this.camera.rotation.z = Math.PI; // Разворот для правильного вида сверху
+        this.camera.position.set(0, 30, 30); // Позиция над землей
+        this.camera.lookAt(0, 0, 0); // Направлена на игрока
         
         // Создание рендерера
         this.renderer = new THREE.WebGLRenderer({
@@ -45,6 +51,12 @@ export class Renderer {
         // Создание земли
         this.createGround();
         
+        // Инициализация системы видимости
+        this.initVisibilitySystem();
+        
+        // Инициализация тумана войны
+        this.initFogOfWar();
+        
         // Обработчик изменения размера окна
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -59,33 +71,33 @@ export class Renderer {
     setupLights() {
         // Основной направленный свет (имитация солнца)
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(10, 20, 10);
+        directionalLight.position.set(10, 30, 10);
         directionalLight.castShadow = true;
         
         // Настройка теней
-        directionalLight.shadow.mapSize.width = 1024;
-        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
         directionalLight.shadow.camera.near = 0.5;
-        directionalLight.shadow.camera.far = 50;
-        directionalLight.shadow.camera.left = -20;
-        directionalLight.shadow.camera.right = 20;
-        directionalLight.shadow.camera.top = 20;
-        directionalLight.shadow.camera.bottom = -20;
+        directionalLight.shadow.camera.far = 100;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
         
         this.scene.add(directionalLight);
         this.lights.push(directionalLight);
         
         // Рассеянный свет (чтобы тени не были слишком темными)
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        const ambientLight = new THREE.AmbientLight(0x505050, 0.7);
         this.scene.add(ambientLight);
         this.lights.push(ambientLight);
     }
     
     /**
-     * Создание земли (временная поверхность для прототипа)
+     * Создание земли (простая поверхность для прототипа)
      */
     createGround() {
-        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
         const groundMaterial = new THREE.MeshStandardMaterial({
             color: 0x3e6539, // Зеленый цвет земли
             roughness: 1,
@@ -98,94 +110,386 @@ export class Renderer {
         ground.receiveShadow = true;
         
         this.scene.add(ground);
-        
-        // Добавим немного случайных объектов для демонстрации
-        this.addDemoObjects();
     }
     
     /**
-     * Добавление демонстрационных объектов (для прототипа)
+     * Инициализация системы видимости
      */
-    addDemoObjects() {
-        // Создаем несколько куб-контейнеров для лута
-        for (let i = 0; i < 10; i++) {
-            const size = 1;
-            const geometry = new THREE.BoxGeometry(size, size, size);
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x8B4513,
-                roughness: 0.8
-            });
-            
-            const box = new THREE.Mesh(geometry, material);
-            
-            // Случайное расположение
-            const x = (Math.random() - 0.5) * 50;
-            const z = (Math.random() - 0.5) * 50;
-            box.position.set(x, 0, z);
-            
-            box.castShadow = true;
-            box.receiveShadow = true;
-            
-            // Добавляем метаданные для идентификации как контейнер лута
-            box.userData = {
-                type: 'container',
-                id: `container_${i}`,
-                lootable: true
-            };
-            
-            this.scene.add(box);
-        }
+    initVisibilitySystem() {
+        // Создаем группу для системы видимости
+        this.visibilitySystem = new THREE.Group();
+        this.scene.add(this.visibilitySystem);
         
-        // Добавим примитивные стены для демонстрации коллизий
-        const wallMaterial = new THREE.MeshStandardMaterial({
-            color: 0x555555,
-            roughness: 1
+        // Создаем шейдерный материал для эффекта чернобелого затемнения
+        const visibilityShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                viewAngle: { value: 90.0 },
+                viewDirection: { value: new THREE.Vector2(0, 1) },
+                playerPosition: { value: new THREE.Vector2(0, 0) },
+                screenSize: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float viewAngle;
+                uniform vec2 viewDirection;
+                uniform vec2 playerPosition;
+                uniform vec2 screenSize;
+                
+                varying vec2 vUv;
+                
+                void main() {
+                    vec4 texel = texture2D(tDiffuse, vUv);
+                    
+                    // Преобразуем UV координаты в позицию в мировом пространстве
+                    vec2 worldPos = vec2(
+                        (vUv.x - 0.5) * screenSize.x,
+                        (vUv.y - 0.5) * screenSize.y
+                    );
+                    
+                    // Вектор от игрока к текущей точке
+                    vec2 toPixel = worldPos - playerPosition;
+                    
+                    // Угол между направлением взгляда и вектором к точке
+                    float angleToPixel = acos(dot(normalize(toPixel), normalize(viewDirection)));
+                    angleToPixel = angleToPixel * 180.0 / 3.14159265359; // переводим в градусы
+                    
+                    // Если точка находится в конусе видимости
+                    if (angleToPixel <= viewAngle / 2.0) {
+                        gl_FragColor = texel; // Видимая область (цветная)
+                    } else {
+                        // Невидимая область (чернобелая и затемненная)
+                        float gray = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+                        gl_FragColor = vec4(gray * 0.3, gray * 0.3, gray * 0.3, 1.0);
+                    }
+                }
+            `
+        };
+        
+        // В будущем здесь будет создание post-process эффекта с шейдером
+        // Для прототипа используем упрощенную геометрическую репрезентацию
+        
+        // Создаем сектор видимости (конус)
+        this.createVisibilityCone();
+    }
+    
+    /**
+     * Создание конуса видимости
+     */
+    createVisibilityCone() {
+        // Создаем конус видимости
+        const angle = 90; // Угол в градусах
+        const radius = 50; // Радиус видимости
+        
+        // Создаем геометрию сектора
+        const segments = 32;
+        const coneGeometry = new THREE.CircleGeometry(radius, segments, -angle / 2 * (Math.PI / 180), angle * (Math.PI / 180));
+        
+        // Создаем материал с прозрачностью
+        const coneMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffff00,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.DoubleSide
         });
         
-        // Создаем стены по периметру
-        const wallSize = 100;
-        const wallHeight = 2;
-        const wallThickness = 1;
+        // Создаем меш и поворачиваем его для вида сверху
+        const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+        cone.rotation.x = -Math.PI / 2;
+        cone.position.y = 0.1; // Немного выше земли
         
-        // Стена 1 (спереди)
-        const wall1 = new THREE.Mesh(
-            new THREE.BoxGeometry(wallSize, wallHeight, wallThickness),
-            wallMaterial
-        );
-        wall1.position.set(0, wallHeight/2, wallSize/2);
-        wall1.castShadow = true;
-        wall1.receiveShadow = true;
-        this.scene.add(wall1);
+        // Добавляем в группу видимости
+        this.visibilitySystem.add(cone);
+        this.visibilityCone = cone;
+    }
+    
+    /**
+     * Инициализация тумана войны
+     */
+    initFogOfWar() {
+        // Создаем сетку для тумана войны
+        const width = 1000;
+        const height = 1000;
+        const resolution = 100; // Количество ячеек по каждой оси
         
-        // Стена 2 (сзади)
-        const wall2 = new THREE.Mesh(
-            new THREE.BoxGeometry(wallSize, wallHeight, wallThickness),
-            wallMaterial
-        );
-        wall2.position.set(0, wallHeight/2, -wallSize/2);
-        wall2.castShadow = true;
-        wall2.receiveShadow = true;
-        this.scene.add(wall2);
+        const geometry = new THREE.PlaneGeometry(width, height, resolution - 1, resolution - 1);
         
-        // Стена 3 (слева)
-        const wall3 = new THREE.Mesh(
-            new THREE.BoxGeometry(wallThickness, wallHeight, wallSize),
-            wallMaterial
-        );
-        wall3.position.set(-wallSize/2, wallHeight/2, 0);
-        wall3.castShadow = true;
-        wall3.receiveShadow = true;
-        this.scene.add(wall3);
+        // Создаем шейдерный материал для тумана войны
+        const fogOfWarMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.7,
+            side: THREE.DoubleSide
+        });
         
-        // Стена 4 (справа)
-        const wall4 = new THREE.Mesh(
-            new THREE.BoxGeometry(wallThickness, wallHeight, wallSize),
-            wallMaterial
-        );
-        wall4.position.set(wallSize/2, wallHeight/2, 0);
-        wall4.castShadow = true;
-        wall4.receiveShadow = true;
-        this.scene.add(wall4);
+        // Создаем меш и поворачиваем его для вида сверху
+        const fogOfWar = new THREE.Mesh(geometry, fogOfWarMaterial);
+        fogOfWar.rotation.x = -Math.PI / 2;
+        fogOfWar.position.y = 0.2; // Немного выше земли и конуса видимости
+        
+        // Данные для тумана войны
+        this.fogOfWarData = {
+            grid: [], // Двумерный массив с информацией о посещенных областях
+            width: resolution,
+            height: resolution,
+            mesh: fogOfWar
+        };
+        
+        // Инициализация сетки тумана войны
+        this.initFogOfWarGrid();
+        
+        // Добавляем туман войны в сцену
+        this.scene.add(fogOfWar);
+        this.fogOfWarSystem = fogOfWar;
+    }
+    
+    /**
+     * Инициализация сетки тумана войны
+     */
+    initFogOfWarGrid() {
+        const { width, height } = this.fogOfWarData;
+        
+        // Инициализация двумерного массива
+        for (let x = 0; x < width; x++) {
+            this.fogOfWarData.grid[x] = [];
+            for (let z = 0; z < height; z++) {
+                // Каждая ячейка: 0 - непосещено, 1 - посещено
+                this.fogOfWarData.grid[x][z] = 0;
+            }
+        }
+        
+        // Создаем геометрию для обновления вершин
+        this.updateFogOfWarGeometry();
+    }
+    
+    /**
+     * Обновление геометрии тумана войны
+     */
+    updateFogOfWarGeometry() {
+        if (!this.fogOfWarData.mesh || !this.fogOfWarData.mesh.geometry) return;
+        
+        const geometry = this.fogOfWarData.mesh.geometry;
+        const positions = geometry.attributes.position.array;
+        const colors = new Float32Array(positions.length);
+        
+        // Обновляем цвет каждой вершины в зависимости от значения в сетке
+        for (let i = 0, j = 0; i < positions.length; i += 3, j++) {
+            const x = Math.floor((j % (this.fogOfWarData.width + 1)) / this.fogOfWarData.width * this.fogOfWarData.width);
+            const z = Math.floor(j / (this.fogOfWarData.width + 1) / this.fogOfWarData.height * this.fogOfWarData.height);
+            
+            // Получаем значение из сетки (или 0, если за пределами)
+            const visited = (this.fogOfWarData.grid[x] && this.fogOfWarData.grid[x][z]) || 0;
+            
+            // Устанавливаем прозрачность в зависимости от посещения
+            // RGB одинаковые (черный), но альфа меняется
+            colors[i] = 0;
+            colors[i + 1] = 0;
+            colors[i + 2] = visited === 1 ? 0 : 0.7; // 0 - посещено, 0.7 - непосещено
+        }
+        
+        // Добавляем атрибут цвета
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        // Обновляем материал, чтобы использовать цвета вершин
+        this.fogOfWarData.mesh.material = new THREE.MeshBasicMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.7
+        });
+    }
+    
+    /**
+     * Обновление тумана войны в зависимости от позиции игрока
+     * @param {Object} playerPosition - позиция игрока
+     * @param {Object} viewDirection - направление взгляда
+     * @param {number} viewAngle - угол обзора
+     * @param {number} viewDistance - дистанция обзора
+     */
+    updateFogOfWar(playerPosition, viewDirection, viewAngle, viewDistance) {
+        if (!this.fogOfWarData || !this.fogOfWarData.grid) return;
+        
+        // Преобразуем мировые координаты в координаты сетки
+        const gridX = Math.floor((playerPosition.x + 500) / 1000 * this.fogOfWarData.width);
+        const gridZ = Math.floor((playerPosition.z + 500) / 1000 * this.fogOfWarData.height);
+        
+        // Радиус видимости в ячейках сетки
+        const gridRadius = Math.floor(viewDistance / 1000 * this.fogOfWarData.width);
+        
+        // Открываем туман войны в области видимости
+        const angleInRadians = viewAngle * Math.PI / 180;
+        let updated = false;
+        
+        // Проверяем ячейки в квадрате вокруг игрока
+        for (let x = Math.max(0, gridX - gridRadius); x < Math.min(this.fogOfWarData.width, gridX + gridRadius); x++) {
+            for (let z = Math.max(0, gridZ - gridRadius); z < Math.min(this.fogOfWarData.height, gridZ + gridRadius); z++) {
+                // Преобразуем координаты сетки обратно в мировые
+                const worldX = (x / this.fogOfWarData.width) * 1000 - 500;
+                const worldZ = (z / this.fogOfWarData.height) * 1000 - 500;
+                
+                // Вектор от игрока до ячейки
+                const dx = worldX - playerPosition.x;
+                const dz = worldZ - playerPosition.z;
+                
+                // Расстояние до ячейки
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                // Если ячейка в радиусе видимости
+                if (distance <= viewDistance) {
+                    // Угол между направлением взгляда и направлением на ячейку
+                    const angle = Math.atan2(dz, dx) - Math.atan2(viewDirection.z, viewDirection.x);
+                    const normalizedAngle = ((angle + Math.PI) % (2 * Math.PI)) - Math.PI; // Нормализация до [-PI, PI]
+                    
+                    // Если ячейка в конусе видимости
+                    if (Math.abs(normalizedAngle) <= angleInRadians / 2) {
+                        // Проверяем, не посещена ли уже эта ячейка
+                        if (this.fogOfWarData.grid[x][z] === 0) {
+                            // Постепенно открываем туман войны
+                            this.fogOfWarData.grid[x][z] = 0.5; // Начинаем открывать
+                            updated = true;
+                            
+                            // Полностью открываем через некоторое время
+                            setTimeout(() => {
+                                this.fogOfWarData.grid[x][z] = 1; // Полностью открыто
+                                this.updateFogOfWarGeometry();
+                            }, 300);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Обновляем геометрию, если были изменения
+        if (updated) {
+            this.updateFogOfWarGeometry();
+        }
+    }
+    
+    /**
+     * Обновление конуса видимости
+     * @param {Object} playerPosition - позиция игрока
+     * @param {Object} viewDirection - направление взгляда
+     * @param {number} viewAngle - угол обзора
+     */
+    updateVisibilityCone(playerPosition, viewDirection, viewAngle) {
+        if (!this.visibilityCone) return;
+        
+        // Обновляем позицию конуса
+        this.visibilityCone.position.x = playerPosition.x;
+        this.visibilityCone.position.z = playerPosition.z;
+        
+        // Обновляем угол конуса
+        const angleInRadians = viewAngle * Math.PI / 180;
+        
+        // Создаем новую геометрию с обновленным углом
+        const radius = 50; // Радиус видимости
+        const segments = 32;
+        const newGeometry = new THREE.CircleGeometry(radius, segments, 0, angleInRadians);
+        
+        // Заменяем геометрию
+        this.visibilityCone.geometry.dispose();
+        this.visibilityCone.geometry = newGeometry;
+        
+        // Поворачиваем конус в направлении взгляда
+        const angle = Math.atan2(viewDirection.x, viewDirection.z);
+        this.visibilityCone.rotation.set(-Math.PI / 2, 0, -angle);
+    }
+    
+    /**
+     * Создание временного луча для визуализации выстрела
+     * @param {Object} start - начальная точка луча
+     * @param {Object} end - конечная точка луча
+     * @param {number} color - цвет луча
+     * @param {number} duration - длительность отображения в миллисекундах
+     */
+    createTemporaryBeam(start, end, color = 0xFF0000, duration = 100) {
+        // Создаем материал для луча
+        const material = new THREE.LineBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        // Создаем геометрию
+        const geometry = new THREE.BufferGeometry();
+        const points = [
+            new THREE.Vector3(start.x, start.y, start.z),
+            new THREE.Vector3(end.x, end.y, end.z)
+        ];
+        geometry.setFromPoints(points);
+        
+        // Создаем линию
+        const line = new THREE.Line(geometry, material);
+        this.scene.add(line);
+        
+        // Добавляем в список временных объектов
+        const tempObject = {
+            object: line,
+            endTime: Date.now() + duration
+        };
+        this.temporaryObjects.push(tempObject);
+        
+        // Устанавливаем таймер для удаления
+        setTimeout(() => {
+            this.removeTemporaryObject(tempObject);
+        }, duration);
+    }
+    
+    /**
+     * Удаление временного объекта
+     * @param {Object} tempObject - временный объект для удаления
+     */
+    removeTemporaryObject(tempObject) {
+        if (!tempObject || !tempObject.object) return;
+        
+        // Удаляем со сцены
+        this.scene.remove(tempObject.object);
+        
+        // Удаляем из списка
+        const index = this.temporaryObjects.indexOf(tempObject);
+        if (index !== -1) {
+            this.temporaryObjects.splice(index, 1);
+        }
+        
+        // Освобождаем ресурсы
+        if (tempObject.object.geometry) {
+            tempObject.object.geometry.dispose();
+        }
+        if (tempObject.object.material) {
+            tempObject.object.material.dispose();
+        }
+    }
+    
+    /**
+     * Очистка устаревших временных объектов
+     */
+    cleanTemporaryObjects() {
+        const now = Date.now();
+        
+        // Удаляем устаревшие объекты
+        this.temporaryObjects = this.temporaryObjects.filter(tempObj => {
+            if (tempObj.endTime <= now) {
+                this.scene.remove(tempObj.object);
+                
+                // Освобождаем ресурсы
+                if (tempObj.object.geometry) {
+                    tempObj.object.geometry.dispose();
+                }
+                if (tempObj.object.material) {
+                    tempObj.object.material.dispose();
+                }
+                
+                return false;
+            }
+            return true;
+        });
     }
     
     /**
@@ -221,258 +525,3 @@ export class Renderer {
         
         return playerMesh;
     }
-    
-    /**
-     * Добавление NPC на сцену
-     * @param {Object} npcData - данные NPC
-     * @returns {THREE.Object3D} - объект NPC
-     */
-    addNPC(npcData) {
-        // Создаем временную модель NPC (цилиндр)
-        const geometry = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 8);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0xFF4500, // Оранжевый цвет для NPC
-            roughness: 0.7
-        });
-        
-        const npcMesh = new THREE.Mesh(geometry, material);
-        npcMesh.position.copy(npcData.position);
-        npcMesh.castShadow = true;
-        npcMesh.receiveShadow = true;
-        
-        this.scene.add(npcMesh);
-        
-        return npcMesh;
-    }
-    
-    /**
-     * Добавление предмета на сцену
-     * @param {Object} itemData - данные предмета
-     * @returns {THREE.Object3D} - объект предмета
-     */
-    addItem(itemData) {
-        let itemMesh;
-        
-        // В зависимости от типа предмета создаем разные модели
-        switch(itemData.type) {
-            case 'weapon':
-                itemMesh = this.createWeaponItem(itemData);
-                break;
-            case 'medkit':
-                itemMesh = this.createMedkitItem(itemData);
-                break;
-            case 'ammo':
-                itemMesh = this.createAmmoItem(itemData);
-                break;
-            default:
-                // По умолчанию - маленький куб
-                const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0xFFD700,
-                    roughness: 0.5
-                });
-                itemMesh = new THREE.Mesh(geometry, material);
-        }
-        
-        itemMesh.position.copy(itemData.position);
-        itemMesh.castShadow = true;
-        itemMesh.receiveShadow = true;
-        
-        // Добавляем метаданные
-        itemMesh.userData = {
-            ...itemData,
-            type: 'item'
-        };
-        
-        this.scene.add(itemMesh);
-        
-        return itemMesh;
-    }
-    
-    /**
-     * Создание модели оружия для отображения на земле
-     * @param {Object} itemData - данные предмета
-     * @returns {THREE.Object3D} - модель оружия
-     */
-    createWeaponItem(itemData) {
-        const group = new THREE.Group();
-        
-        // Ствол
-        const barrelGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.8);
-        const barrelMaterial = new THREE.MeshStandardMaterial({
-            color: 0x333333,
-            roughness: 0.5
-        });
-        const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
-        barrel.position.z = 0.2;
-        
-        // Рукоятка
-        const handleGeometry = new THREE.BoxGeometry(0.1, 0.3, 0.1);
-        const handleMaterial = new THREE.MeshStandardMaterial({
-            color: 0x8B4513,
-            roughness: 0.8
-        });
-        const handle = new THREE.Mesh(handleGeometry, handleMaterial);
-        handle.position.y = -0.15;
-        handle.position.z = -0.2;
-        
-        // Собираем модель
-        group.add(barrel);
-        group.add(handle);
-        
-        // Поворачиваем чтобы оружие лежало на земле
-        group.rotation.x = Math.PI / 2;
-        
-        return group;
-    }
-    
-    /**
-     * Создание модели аптечки для отображения на земле
-     * @param {Object} itemData - данные предмета
-     * @returns {THREE.Object3D} - модель аптечки
-     */
-    createMedkitItem(itemData) {
-        // Создаем аптечку (коробка с крестом)
-        const boxGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.4);
-        const boxMaterial = new THREE.MeshStandardMaterial({
-            color: 0xFFFFFF,
-            roughness: 0.5
-        });
-        const box = new THREE.Mesh(boxGeometry, boxMaterial);
-        
-        // Добавляем красный крест
-        const crossGeometry1 = new THREE.BoxGeometry(0.3, 0.01, 0.1);
-        const crossGeometry2 = new THREE.BoxGeometry(0.1, 0.01, 0.3);
-        const crossMaterial = new THREE.MeshStandardMaterial({
-            color: 0xFF0000,
-            roughness: 0.5
-        });
-        
-        const crossPart1 = new THREE.Mesh(crossGeometry1, crossMaterial);
-        const crossPart2 = new THREE.Mesh(crossGeometry2, crossMaterial);
-        
-        crossPart1.position.y = 0.11;
-        crossPart2.position.y = 0.11;
-        
-        box.add(crossPart1);
-        box.add(crossPart2);
-        
-        return box;
-    }
-    
-    /**
-     * Создание модели патронов для отображения на земле
-     * @param {Object} itemData - данные предмета
-     * @returns {THREE.Object3D} - модель патронов
-     */
-    createAmmoItem(itemData) {
-        const group = new THREE.Group();
-        
-        // Создаем коробку патронов
-        const boxGeometry = new THREE.BoxGeometry(0.2, 0.1, 0.4);
-        const boxMaterial = new THREE.MeshStandardMaterial({
-            color: 0x556B2F,
-            roughness: 0.5
-        });
-        const box = new THREE.Mesh(boxGeometry, boxMaterial);
-        
-        group.add(box);
-        
-        return group;
-    }
-    
-    /**
-     * Обновление позиции и вращения объекта на сцене
-     * @param {THREE.Object3D} object - объект для обновления
-     * @param {Object} position - новая позиция
-     * @param {Object} rotation - новое вращение
-     */
-    updateObjectTransform(object, position, rotation) {
-        if (position) {
-            object.position.copy(position);
-        }
-        
-        if (rotation) {
-            object.rotation.copy(rotation);
-        }
-    }
-    
-    /**
-     * Обновление позиции камеры (следование за игроком)
-     * @param {THREE.Vector3} targetPosition - позиция за которой следует камера
-     */
-    updateCamera(targetPosition) {
-        if (!targetPosition) return;
-        
-        // Обновляем позицию камеры, чтобы следовать за игроком
-        this.camera.position.x = targetPosition.x;
-        this.camera.position.z = targetPosition.z + 10; // Немного позади
-        this.camera.position.y = 15; // Высота над землей
-        
-        // Направляем камеру на игрока
-        this.camera.lookAt(targetPosition);
-    }
-    
-    /**
-     * Рендеринг сцены
-     */
-    render() {
-        if (!this.renderer || !this.scene || !this.camera) return;
-        
-        this.renderer.render(this.scene, this.camera);
-    }
-    
-    /**
-     * Загрузка модели
-     * @param {string} path - путь к модели
-     * @param {string} key - ключ под которым сохранить модель
-     * @returns {Promise} - промис загрузки
-     */
-    loadModel(path, key) {
-        return new Promise((resolve, reject) => {
-            const loader = new THREE.GLTFLoader();
-            
-            loader.load(
-                path,
-                (gltf) => {
-                    this.models[key] = gltf;
-                    resolve(gltf);
-                },
-                (xhr) => {
-                    console.log(`${path}: ${(xhr.loaded / xhr.total) * 100}% loaded`);
-                },
-                (error) => {
-                    console.error('Ошибка при загрузке модели:', error);
-                    reject(error);
-                }
-            );
-        });
-    }
-    
-    /**
-     * Загрузка текстуры
-     * @param {string} path - путь к текстуре
-     * @param {string} key - ключ под которым сохранить текстуру
-     * @returns {Promise} - промис загрузки
-     */
-    loadTexture(path, key) {
-        return new Promise((resolve, reject) => {
-            const loader = new THREE.TextureLoader();
-            
-            loader.load(
-                path,
-                (texture) => {
-                    this.textures[key] = texture;
-                    resolve(texture);
-                },
-                (xhr) => {
-                    console.log(`${path}: ${(xhr.loaded / xhr.total) * 100}% loaded`);
-                },
-                (error) => {
-                    console.error('Ошибка при загрузке текстуры:', error);
-                    reject(error);
-                }
-            );
-        });
-    }
-}

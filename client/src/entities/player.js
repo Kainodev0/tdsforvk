@@ -1,3 +1,5 @@
+// client/src/entities/player.js
+
 /**
  * Класс игрока, управляющий поведением и состоянием персонажа
  */
@@ -22,9 +24,12 @@ export class Player {
         // Характеристики
         this.health = options.health || 100;
         this.maxHealth = options.maxHealth || 100;
-        this.speed = options.speed || 5; // скорость движения
+        this.speed = options.speed || 5; // базовая скорость движения
         this.weapon = options.weapon || 'pistol';
         this.ammo = options.ammo || 30;
+        this.weaponType = 'single'; // 'single' или 'auto'
+        this.fireRate = 500; // задержка между выстрелами в мс (для одиночного оружия)
+        this.recoil = { x: 0.05, y: 0.05 }; // сила отдачи
         
         // Инвентарь
         this.inventory = options.inventory || {
@@ -34,9 +39,26 @@ export class Player {
         
         // Состояния
         this.isMoving = false;
+        this.isRunning = false;
+        this.isAiming = false;
         this.isShooting = false;
+        this.canShoot = true; // флаг возможности стрельбы
         this.lastShootTime = 0;
-        this.shootCooldown = 500; // задержка между выстрелами в мс
+        this.currentState = 'idle'; // idle, walk, run, aim, shoot
+        
+        // Параметры обзора
+        this.viewAngle = 90; // начальный угол обзора в градусах
+        this.normalViewAngle = 90;
+        this.aimingViewAngle = 45;
+        this.runningViewAngle = 70; // угол обзора при беге
+        this.viewDistance = 50; // дальность видимости
+        
+        // Параметры движения
+        this.normalSpeed = 5;
+        this.runningSpeed = 7.5; // скорость бега (+50%)
+        this.aimingSpeed = 1.5; // скорость при прицеливании (-70%)
+        this.acceleration = 10; // ускорение для плавности движения
+        this.velocity = { x: 0, z: 0 }; // текущая скорость
         
         // Ссылки на другие модули
         this.renderer = options.renderer;
@@ -74,24 +96,158 @@ export class Player {
     setupControls() {
         if (!this.input) return;
         
-        // Добавляем обработчик клика для стрельбы
-        this.input.setClickCallback(() => {
-            this.shoot();
+        // Добавляем обработчик ЛКМ для прицеливания
+        this.input.setMouseDownCallback((button, position) => {
+            if (button === 0) { // Левая кнопка
+                this.startAiming();
+            }
+        });
+        
+        // Обработчик отпускания ЛКМ
+        this.input.setMouseUpCallback((button) => {
+            if (button === 0) { // Левая кнопка
+                this.stopAiming();
+            }
+        });
+        
+        // Обработчик ПКМ для стрельбы
+        this.input.setRightClickCallback(() => {
+            this.tryShoot();
         });
         
         // Обработчик движения мыши для вращения
         this.input.setMouseMoveCallback((position, delta) => {
-            this.handleMouseMove(delta);
+            this.handleMouseMove(position);
         });
     }
     
     /**
-     * Обработка движения мыши
-     * @param {Object} delta - изменение позиции мыши {x, y}
+     * Начало прицеливания
      */
-    handleMouseMove(delta) {
-        // В будущем здесь будет вращение персонажа и оружия
-        // Для прототипа ничего не делаем
+    startAiming() {
+        this.isAiming = true;
+        this.speed = this.aimingSpeed;
+        this.viewAngle = this.aimingViewAngle;
+        console.log('Начало прицеливания');
+    }
+    
+    /**
+     * Конец прицеливания
+     */
+    stopAiming() {
+        this.isAiming = false;
+        this.speed = this.normalSpeed;
+        this.viewAngle = this.normalViewAngle;
+        console.log('Конец прицеливания');
+    }
+    
+    /**
+     * Попытка выстрела
+     */
+    tryShoot() {
+        // Можно стрелять только если игрок прицеливается
+        if (!this.isAiming || !this.canShoot || this.ammo <= 0) {
+            return;
+        }
+        
+        const currentTime = Date.now();
+        
+        // Проверяем временную задержку между выстрелами
+        if (currentTime - this.lastShootTime < this.fireRate) {
+            return;
+        }
+        
+        // Устанавливаем время последнего выстрела
+        this.lastShootTime = currentTime;
+        
+        // Уменьшаем количество патронов
+        this.ammo--;
+        
+        // Устанавливаем флаг стрельбы (для анимации)
+        this.isShooting = true;
+        setTimeout(() => {
+            this.isShooting = false;
+        }, 100);
+        
+        // Применяем отдачу
+        this.applyRecoil();
+        
+        // Создаем выстрел
+        this.createShot();
+        
+        // Для одиночного оружия добавляем задержку перед следующим выстрелом
+        if (this.weaponType === 'single') {
+            this.canShoot = false;
+            setTimeout(() => {
+                this.canShoot = true;
+            }, this.fireRate);
+        }
+        
+        // Отправляем информацию о выстреле на сервер
+        if (this.game && this.game.network) {
+            this.game.network.sendPlayerShoot(
+                this.position,
+                this.direction,
+                this.weapon
+            );
+        }
+    }
+    
+    /**
+     * Применение отдачи при стрельбе
+     */
+    applyRecoil() {
+        // Случайное смещение прицела в пределах recoil
+        const recoilX = (Math.random() - 0.5) * this.recoil.x * 2;
+        const recoilY = -Math.abs(Math.random() * this.recoil.y); // Всегда вверх
+        
+        // Получаем текущую позицию мыши
+        const mousePos = this.input.getMousePosition();
+        
+        // Симулируем движение мыши с отдачей
+        const newMousePos = {
+            x: mousePos.x + recoilX * 100, // Умножаем для заметного эффекта
+            y: mousePos.y + recoilY * 100
+        };
+        
+        // Обновляем направление игрока
+        this.handleMouseMove(newMousePos);
+    }
+    
+    /**
+     * Обработка движения мыши
+     * @param {Object} position - позиция мыши {x, y}
+     */
+    handleMouseMove(position) {
+        // Получаем размеры канваса
+        const canvasRect = this.renderer.canvas.getBoundingClientRect();
+        const canvasCenter = {
+            x: canvasRect.left + canvasRect.width / 2,
+            y: canvasRect.top + canvasRect.height / 2
+        };
+        
+        // Вычисляем вектор от центра к мыши
+        const mouseVec = {
+            x: position.x - canvasCenter.x,
+            y: position.y - canvasCenter.y
+        };
+        
+        // Нормализуем вектор
+        const length = Math.sqrt(mouseVec.x * mouseVec.x + mouseVec.y * mouseVec.y);
+        if (length > 0) {
+            mouseVec.x /= length;
+            mouseVec.y /= length;
+        }
+        
+        // Вычисляем угол поворота (в радианах)
+        const angle = Math.atan2(mouseVec.x, -mouseVec.y);
+        
+        // Устанавливаем направление игрока
+        this.rotation.y = angle;
+        this.direction = {
+            x: Math.sin(angle),
+            z: -Math.cos(angle)
+        };
     }
     
     /**
@@ -109,10 +265,69 @@ export class Player {
             if (this.renderer) {
                 this.renderer.updateCamera(this.position);
             }
+            
+            // Обновляем параметры при нажатии Shift (бег)
+            this.handleRunning();
+            
+            // Обновляем состояние анимации
+            this.updateAnimationState();
         }
         
         // Обновляем модель (позицию и анимацию)
         this.updateModel();
+    }
+    
+    /**
+     * Обработка бега (нажатие Shift)
+     */
+    handleRunning() {
+        if (!this.input) return;
+        
+        const wasRunning = this.isRunning;
+        
+        // Проверяем нажат ли Shift и не в режиме прицеливания
+        if (this.input.isKeyPressed('ShiftLeft') && !this.isAiming) {
+            if (!this.isRunning) {
+                this.isRunning = true;
+                this.speed = this.runningSpeed;
+                this.viewAngle = this.runningViewAngle;
+            }
+        } else if (this.isRunning) {
+            this.isRunning = false;
+            this.speed = this.isAiming ? this.aimingSpeed : this.normalSpeed;
+            this.viewAngle = this.isAiming ? this.aimingViewAngle : this.normalViewAngle;
+        }
+        
+        // Если состояние бега изменилось, сообщаем об этом
+        if (wasRunning !== this.isRunning) {
+            console.log(this.isRunning ? 'Начало бега' : 'Конец бега');
+        }
+    }
+    
+    /**
+     * Обновление состояния анимации
+     */
+    updateAnimationState() {
+        let newState = 'idle';
+        
+        if (this.isMoving) {
+            newState = this.isRunning ? 'run' : 'walk';
+        }
+        
+        if (this.isAiming) {
+            newState = 'aim';
+        }
+        
+        if (this.isShooting) {
+            newState = 'shoot';
+        }
+        
+        if (this.currentState !== newState) {
+            this.currentState = newState;
+            console.log(`Состояние анимации: ${this.currentState}`);
+            
+            // Здесь будет логика смены анимации
+        }
     }
     
     /**
@@ -125,18 +340,42 @@ export class Player {
         // Получаем направление движения
         const moveDir = this.input.getMovementDirection();
         
-        // Если вектор движения нулевой, игрок стоит на месте
+        // Если вектор движения нулевой, снижаем скорость
         if (moveDir.x === 0 && moveDir.z === 0) {
-            this.isMoving = false;
-            return;
+            // Применяем трение для плавной остановки
+            this.velocity.x *= 0.9;
+            this.velocity.z *= 0.9;
+            
+            // Если скорость совсем маленькая, останавливаемся
+            if (Math.abs(this.velocity.x) < 0.01 && Math.abs(this.velocity.z) < 0.01) {
+                this.velocity.x = 0;
+                this.velocity.z = 0;
+                this.isMoving = false;
+            }
+        } else {
+            // Устанавливаем флаг движения
+            this.isMoving = true;
+            
+            // Вычисляем целевую скорость с учетом нормализации
+            const length = Math.sqrt(moveDir.x * moveDir.x + moveDir.z * moveDir.z);
+            const normalizedDir = {
+                x: moveDir.x / length,
+                z: moveDir.z / length
+            };
+            
+            const targetVel = {
+                x: normalizedDir.x * this.speed,
+                z: normalizedDir.z * this.speed
+            };
+            
+            // Плавно изменяем скорость
+            this.velocity.x += (targetVel.x - this.velocity.x) * this.acceleration * deltaTime;
+            this.velocity.z += (targetVel.z - this.velocity.z) * this.acceleration * deltaTime;
         }
         
-        // Устанавливаем флаг движения
-        this.isMoving = true;
-        
         // Вычисляем новую позицию
-        const newX = this.position.x + moveDir.x * this.speed * deltaTime;
-        const newZ = this.position.z + moveDir.z * this.speed * deltaTime;
+        const newX = this.position.x + this.velocity.x * deltaTime;
+        const newZ = this.position.z + this.velocity.z * deltaTime;
         
         // Проверка столкновений (упрощенная)
         const canMoveX = this.checkCollision({ x: newX, y: this.position.y, z: this.position.z });
@@ -145,23 +384,14 @@ export class Player {
         // Обновляем позицию
         if (canMoveX) {
             this.position.x = newX;
+        } else {
+            this.velocity.x = 0; // Остановка при столкновении
         }
         
         if (canMoveZ) {
             this.position.z = newZ;
-        }
-        
-        // Обновляем направление взгляда, если игрок двигается
-        if (moveDir.x !== 0 || moveDir.z !== 0) {
-            // Обновляем вращение для соответствия направлению движения
-            const angle = Math.atan2(moveDir.x, moveDir.z);
-            this.rotation.y = angle;
-            
-            // Обновляем вектор направления взгляда
-            this.direction = {
-                x: Math.sin(angle),
-                z: Math.cos(angle)
-            };
+        } else {
+            this.velocity.z = 0; // Остановка при столкновении
         }
         
         // Отправляем изменения на сервер, если доступно
@@ -177,7 +407,7 @@ export class Player {
      */
     checkCollision(newPosition) {
         // Проверяем выход за границы карты
-        const mapSize = 45; // Размер карты (половина от 100)
+        const mapSize = 500; // Половина размера карты (1000x1000)
         
         if (Math.abs(newPosition.x) > mapSize || Math.abs(newPosition.z) > mapSize) {
             return false;
@@ -190,65 +420,25 @@ export class Player {
     }
     
     /**
-     * Обработка стрельбы
-     */
-    shoot() {
-        const currentTime = Date.now();
-        
-        // Проверяем временную задержку между выстрелами
-        if (currentTime - this.lastShootTime < this.shootCooldown) {
-            return;
-        }
-        
-        // Проверяем наличие патронов
-        if (this.ammo <= 0) {
-            console.log('Нет патронов!');
-            return;
-        }
-        
-        // Устанавливаем время последнего выстрела
-        this.lastShootTime = currentTime;
-        
-        // Уменьшаем количество патронов
-        this.ammo--;
-        
-        // Устанавливаем флаг стрельбы (для анимации)
-        this.isShooting = true;
-        setTimeout(() => {
-            this.isShooting = false;
-        }, 100);
-        
-        // Создаем выстрел
-        this.createShot();
-        
-        // Отправляем информацию о выстреле на сервер
-        if (this.game && this.game.network) {
-            this.game.network.sendPlayerShoot(
-                this.position,
-                this.direction,
-                this.weapon
-            );
-        }
-    }
-    
-    /**
      * Создание выстрела (визуально и логически)
      */
     createShot() {
-        // В будущем здесь будет логика создания пули, проверки попаданий и т.д.
-        console.log('Выстрел!', this.direction);
-        
-        // Простой рейкаст для определения попадания
-        const rayStart = { ...this.position };
-        rayStart.y += 1; // Уровень "глаз"
-        
-        const rayEnd = {
-            x: rayStart.x + this.direction.x * 100,
-            y: rayStart.y,
-            z: rayStart.z + this.direction.z * 100
-        };
-        
-        // Здесь должна быть логика проверки попаданий
+        // В прототипе создаем простой луч
+        if (this.renderer && this.renderer.scene) {
+            const rayStart = { ...this.position };
+            rayStart.y += 1; // Уровень "глаз"
+            
+            const rayEnd = {
+                x: rayStart.x + this.direction.x * 100,
+                y: rayStart.y,
+                z: rayStart.z + this.direction.z * 100
+            };
+            
+            // Создаем временный луч для визуализации выстрела
+            this.renderer.createTemporaryBeam(rayStart, rayEnd, 0xFF0000, 100);
+            
+            console.log('Выстрел!', this.direction);
+        }
     }
     
     /**
@@ -264,138 +454,26 @@ export class Player {
     }
     
     /**
-     * Получение урона
-     * @param {number} amount - количество урона
-     * @returns {boolean} - жив ли игрок после получения урона
+     * Получение угла обзора
+     * @returns {number} - текущий угол обзора в градусах
      */
-    takeDamage(amount) {
-        this.health = Math.max(0, this.health - amount);
-        
-        // Обновляем HUD, если это локальный игрок
-        if (this.isLocalPlayer && this.game && this.game.ui && this.game.ui.hud) {
-            this.game.ui.hud.update({ health: this.health });
-        }
-        
-        // Проверяем, жив ли игрок
-        if (this.health <= 0) {
-            this.die();
-            return false;
-        }
-        
-        return true;
+    getViewAngle() {
+        return this.viewAngle;
     }
     
     /**
-     * Смерть игрока
+     * Получение дальности обзора
+     * @returns {number} - текущая дальность обзора
      */
-    die() {
-        console.log('Игрок погиб');
-        
-        // Здесь будет логика смерти и респавна
+    getViewDistance() {
+        return this.viewDistance;
     }
     
     /**
-     * Использование предмета
-     * @param {string} itemId - идентификатор предмета
-     * @returns {boolean} - успешность использования
+     * Получение направления взгляда
+     * @returns {Object} - вектор направления {x, z}
      */
-    useItem(itemId) {
-        // Находим предмет в инвентаре
-        const itemIndex = this.inventory.items.findIndex(item => item.id === itemId);
-        
-        if (itemIndex === -1) {
-            return false;
-        }
-        
-        const item = this.inventory.items[itemIndex];
-        
-        // Обрабатываем в зависимости от типа предмета
-        switch (item.type) {
-            case 'medkit':
-                // Лечим игрока
-                this.health = Math.min(this.maxHealth, this.health + item.healAmount);
-                
-                // Удаляем предмет из инвентаря
-                this.inventory.items.splice(itemIndex, 1);
-                
-                // Обновляем HUD, если это локальный игрок
-                if (this.isLocalPlayer && this.game && this.game.ui && this.game.ui.hud) {
-                    this.game.ui.hud.update({ health: this.health });
-                }
-                
-                return true;
-                
-            case 'ammo':
-                // Добавляем патроны
-                this.ammo += item.amount;
-                
-                // Удаляем предмет из инвентаря
-                this.inventory.items.splice(itemIndex, 1);
-                
-                // Обновляем HUD
-                if (this.isLocalPlayer && this.game && this.game.ui && this.game.ui.hud) {
-                    this.game.ui.hud.update({ ammo: this.ammo });
-                }
-                
-                return true;
-                
-            default:
-                return false;
-        }
-    }
-    
-    /**
-     * Добавление предмета в инвентарь
-     * @param {Object} item - предмет для добавления
-     * @returns {boolean} - успешность добавления
-     */
-    addItemToInventory(item) {
-        // Проверяем, есть ли место в инвентаре
-        if (this.inventory.items.length >= this.inventory.maxSlots) {
-            return false;
-        }
-        
-        // Добавляем предмет
-        this.inventory.items.push(item);
-        
-        // Обновляем инвентарь, если это локальный игрок
-        if (this.isLocalPlayer && this.game && this.game.ui && this.game.ui.inventory) {
-            this.game.ui.inventory.update(this.inventory);
-        }
-        
-        return true;
-    }
-    
-    /**
-     * Подбор предмета с земли
-     * @param {string} itemId - идентификатор предмета
-     * @returns {boolean} - успешность подбора
-     */
-    pickupItem(itemId) {
-        // Получаем информацию о предмете из сетевого менеджера
-        if (this.game && this.game.network && this.game.network.mockData.items[itemId]) {
-            const itemData = this.game.network.mockData.items[itemId];
-            
-            // Создаем предмет для инвентаря
-            const item = {
-                id: itemData.id,
-                type: itemData.type,
-                // Дополнительные свойства в зависимости от типа
-                ...(itemData.type === 'medkit' ? { healAmount: 50 } : {}),
-                ...(itemData.type === 'ammo' ? { amount: 30 } : {})
-            };
-            
-            // Добавляем в инвентарь
-            const success = this.addItemToInventory(item);
-            
-            if (success) {
-                // Отправляем информацию о подборе на сервер
-                this.game.network.sendItemPickup(itemId, itemData.type);
-                
-                return true;
-            }
-        }
-        
-        return false;
+    getViewDirection() {
+        return { ...this.direction };
     }
 }
