@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TDS Escape - Прототип</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Подключение Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Подключение Rapier.js для физики -->
+    <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d@0.11.2/rapier3d.min.js"></script>
+    <!-- VK Bridge для интеграции с ВКонтакте -->
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="loading-screen">
+            <div class="loader"></div>
+            <div class="loading-text">Загрузка игры...</div>
+        </div>
+        <div id="main-menu" class="hidden">
+            <h1>TDS Escape</h1>
+            <button id="start-game">Начать игру</button>
+            <button id="settings">Настройки</button>
+            <div class="version">Прототип 0.1</div>
+        </div>
+        <canvas id="game-canvas" class="hidden"></canvas>
+        <div id="hud" class="hidden">
+            <div id="health-bar">
+                <div class="health-value"></div>
+            </div>
+            <div id="ammo-counter"></div>
+            <div id="weapon-info"></div>
+            <div id="status-messages"></div>
+        </div>
+        <div id="inventory-screen" class="hidden">
+            <div class="inventory-title">Инвентарь</div>
+            <div class="inventory-grid"></div>
+            <div class="equipped-items"></div>
+            <button id="close-inventory">Закрыть</button>
+        </div>
+    </div>
+    
+    <script type="module" src="src/core/game.js"></script>
+</body>
+</html>
