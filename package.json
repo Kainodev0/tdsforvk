@@ -9,7 +9,6 @@
       "dev:server": "nodemon server/src/server.js",
       "build": "webpack --mode production",
       "predeploy": "npm run build",
-      "deploy": "gh-pages -d dist",
       "lint": "eslint ."
     },
     "keywords": [
