@@ -371,7 +371,7 @@ class Game {
     /**
      * Начать игру
      */
-    startGame() {
+    async startGame() {
         try {
             log('Запуск игры...');
             
@@ -408,7 +408,7 @@ class Game {
             log('Игрок создан');
             
             // Инициализация системы видимости
-            this.initVisionSystem();
+            await this.initVisionSystem();
             
             // Подключение к серверу (в прототипе локально)
             this.network.connect().then(() => {
@@ -431,7 +431,7 @@ class Game {
     /**
      * Метод для инициализации системы видимости
      */
-    initVisionSystem() {
+    async initVisionSystem() {
         try {
             if (!this.renderer || !this.renderer.scene || !this.player) {
                 throw new Error('Не все компоненты доступны для инициализации системы видимости');
@@ -451,13 +451,22 @@ class Game {
                 blurEdges: true // Размытие краев видимости
             });
             
+            // Дожидаемся инициализации системы видимости
+            await visionSystem.init();
+            
+            // Проверяем готовность системы
+            if (!visionSystem.isReady()) {
+                log('Система видимости не готова, но будет инициализирована позже автоматически');
+            }
+            
             // Сохраняем систему видимости в рендерере
             this.renderer.visionSystem = visionSystem;
             
             log('Система видимости инициализирована');
+            return true;
         } catch (error) {
             log(`Ошибка инициализации системы видимости: ${error.message}`);
-            throw error;
+            return false;
         }
     }
     
