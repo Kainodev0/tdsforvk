@@ -9,7 +9,7 @@ export class VisionSystem {
      * @param {Object} options.world - Rapier.js мир физики
      * @param {Object} options.player - игрок, для которого отображается конус зрения
      * @param {number} options.fov - угол обзора в градусах (по умолчанию 90)
-     * @param {number} options.rayCount - количество лучей (по умолчанию 60)
+     * @param {number} options.rayCount - количество лучей (по умолчанию 50)
      * @param {number} options.maxDistance - максимальная дистанция обзора (по умолчанию 50)
      * @param {boolean} options.memoryEnabled - сохранение посещенных областей (по умолчанию true)
      * @param {boolean} options.blurEdges - размытие краев конуса зрения (по умолчанию true)
@@ -26,20 +26,37 @@ export class VisionSystem {
         this.player = options.player;
         
         // Настройки по умолчанию
-        this.fov = options.fov || 90; // угол обзора в градусах
-        this.rayCount = options.rayCount || 60; // количество лучей
+        this.fov = options.fov !== undefined ? options.fov : 90; // угол обзора в градусах
+        this.rayCount = options.rayCount || 50; // количество лучей
         this.maxDistance = options.maxDistance || 50; // максимальная дистанция обзора
         this.memoryEnabled = options.memoryEnabled !== undefined ? options.memoryEnabled : true; // сохранение посещенных областей
         this.blurEdges = options.blurEdges !== undefined ? options.blurEdges : true; // размытие краев конуса зрения
         
+        // Константы для динамической настройки угла обзора
+        this.normalFov = 90; // нормальный угол обзора в градусах
+        this.aimingFov = 45; // угол обзора при прицеливании
+        this.runningFov = 70; // угол обзора при беге
+        
         // Внутренние переменные
         this.visibilityMask = null; // маска для затемнения невидимых областей
-        this.visibilityGroup = null; // группа для всех элементов системы видимости
         this.memoryMask = null; // маска для посещенных областей
         this.visibilityShape = null; // форма для вырезания конуса видимости
-        this.memoryGrid = []; // сетка для отслеживания посещенных областей
+        this.currentVisionMesh = null; // текущая область конуса видимости
+        
+        // Для хранения информации о посещенных зонах
         this.cellSize = options.cellSize || 5; // размер ячейки для карты посещенных областей
-        this.gridResolution = Math.ceil(1000 / this.cellSize); // разрешение сетки для карты (1000 - размер игрового мира)
+        this.gridSize = 1000; // размер игрового мира
+        this.gridResolution = Math.ceil(this.gridSize / this.cellSize); // разрешение сетки
+        this.memoryGrid = new Array(this.gridResolution); // сетка посещенных областей
+        
+        // Инициализация сетки памяти
+        for (let i = 0; i < this.gridResolution; i++) {
+            this.memoryGrid[i] = new Array(this.gridResolution).fill(0);
+        }
+        
+        // Группа для всех элементов системы видимости
+        this.visibilityGroup = new THREE.Group();
+        this.scene.add(this.visibilityGroup);
         
         // Флаг инициализации
         this.isInitialized = false;
@@ -53,11 +70,10 @@ export class VisionSystem {
      */
     init() {
         try {
-            this.initVisibilityMask();
+            console.log('VisionSystem: начало инициализации...');
             
-            if (this.memoryEnabled) {
-                this.initMemoryMap();
-            }
+            // Создаем слои видимости
+            this.initVisibilityLayers();
             
             this.isInitialized = true;
             console.log('VisionSystem: успешно инициализирована');
@@ -67,73 +83,132 @@ export class VisionSystem {
     }
 
     /**
-     * Инициализация маски видимости
+     * Инициализация слоев видимости
      */
-    initVisibilityMask() {
-        // Создаем группу для системы видимости
-        this.visibilityGroup = new THREE.Group();
-        this.scene.add(this.visibilityGroup);
+    initVisibilityLayers() {
+        // 1. Создаем слой тумана войны (полностью закрывает карту)
+        this.createFogOfWarLayer();
         
-        // Создаем большой черный прямоугольник, покрывающий весь мир
-        const worldSize = 1000; // размер игрового мира
-        const maskGeometry = new THREE.PlaneGeometry(worldSize * 1.5, worldSize * 1.5);
-        const maskMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            transparent: true,
-            opacity: 0.9, // Немного увеличим непрозрачность для лучшего затемнения
-            side: THREE.DoubleSide,
-            depthTest: false, // отключаем тест глубины, чтобы маска всегда была видна
-            depthWrite: false // отключаем запись глубины
-        });
+        // 2. Создаем слой памяти (посещенные области в черно-белом)
+        this.createMemoryLayer();
         
-        this.visibilityMask = new THREE.Mesh(maskGeometry, maskMaterial);
-        this.visibilityMask.rotation.x = -Math.PI / 2; // поворачиваем горизонтально
-        this.visibilityMask.position.y = 0.2; // немного выше земли
-        this.visibilityMask.renderOrder = 999; // рендерим маску последней
-        this.visibilityGroup.add(this.visibilityMask);
-        
-        // Создаем форму для вырезания конуса видимости
-        this.visibilityShape = new THREE.Shape();
-        // Изначально пустая форма, будет обновляться в методе update
+        // 3. Создаем слой текущей видимости (конус зрения)
+        this.createVisionConeLayer();
     }
     
     /**
-     * Инициализация карты посещенных областей
+     * Создание слоя тумана войны
      */
-    initMemoryMap() {
-        // Создаем сетку для карты посещенных областей
-        this.memoryGrid = new Array(this.gridResolution);
-        for (let i = 0; i < this.gridResolution; i++) {
-            this.memoryGrid[i] = new Array(this.gridResolution).fill(0);
-        }
-        
-        // Создаем маску для посещенных областей (серая полупрозрачная)
-        const memoryMaskGeometry = new THREE.PlaneGeometry(1000 * 1.5, 1000 * 1.5, this.gridResolution, this.gridResolution);
-        const memoryMaskMaterial = new THREE.MeshBasicMaterial({
-            color: 0xAAAAAA,
+    createFogOfWarLayer() {
+        // Создаем большой черный прямоугольник, покрывающий весь мир
+        const fogGeometry = new THREE.PlaneGeometry(this.gridSize * 1.5, this.gridSize * 1.5);
+        const fogMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
             transparent: true,
-            opacity: 0.5,
+            opacity: 0.95,
             side: THREE.DoubleSide,
             depthTest: false,
-            depthWrite: false,
-            vertexColors: true // включаем поддержку цветов вершин
+            depthWrite: false
         });
         
-        this.memoryMask = new THREE.Mesh(memoryMaskGeometry, memoryMaskMaterial);
-        this.memoryMask.rotation.x = -Math.PI / 2;
-        this.memoryMask.position.y = 0.1; // немного ниже маски видимости
-        this.memoryMask.renderOrder = 998; // рендерим перед маской видимости
-        this.visibilityGroup.add(this.memoryMask);
+        this.fogOfWarMesh = new THREE.Mesh(fogGeometry, fogMaterial);
+        this.fogOfWarMesh.rotation.x = -Math.PI / 2; // горизонтально
+        this.fogOfWarMesh.position.y = 0.3; // немного выше остальных слоев
+        this.fogOfWarMesh.renderOrder = 997; // рендерим под остальными слоями
+        this.visibilityGroup.add(this.fogOfWarMesh);
+    }
+    
+    /**
+     * Создание слоя памяти (посещенные области)
+     */
+    createMemoryLayer() {
+        // Создаем сетку для отображения посещенных областей
+        const gridGeometry = new THREE.PlaneGeometry(
+            this.gridSize * 1.5, 
+            this.gridSize * 1.5,
+            this.gridResolution,
+            this.gridResolution
+        );
         
-        // Инициализируем цвета вершин (полностью непрозрачные)
-        const colors = [];
-        const positions = memoryMaskGeometry.attributes.position.array;
+        // Материал для посещенных областей (чёрно-белый)
+        const memoryMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                opacity: { value: 0.7 },
+                colorInfluence: { value: 0.2 } // насколько сильно сохраняется цвет (0 = полностью ЧБ, 1 = цветной)
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                
+                void main() {
+                    vUv = uv;
+                    vPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float opacity;
+                uniform float colorInfluence;
+                
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                
+                void main() {
+                    // В реальной реализации здесь будет использоваться текстура с рендера сцены
+                    // Для прототипа просто делаем ЧБ эффект
+                    gl_FragColor = vec4(0.3, 0.3, 0.3, opacity);
+                }
+            `,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false
+        });
         
-        for (let i = 0; i < positions.length; i += 3) {
-            colors.push(0, 0, 0); // RGB, полностью черный = непрозрачный
+        this.memoryMesh = new THREE.Mesh(gridGeometry, memoryMaterial);
+        this.memoryMesh.rotation.x = -Math.PI / 2; // горизонтально
+        this.memoryMesh.position.y = 0.2; // выше земли, но ниже тумана
+        this.memoryMesh.renderOrder = 998; // рендерим между туманом и конусом видимости
+        this.visibilityGroup.add(this.memoryMesh);
+        
+        // Создаем атрибут видимости для вершин
+        const visibilityAttribute = new Float32Array(gridGeometry.attributes.position.count);
+        for (let i = 0; i < visibilityAttribute.length; i++) {
+            visibilityAttribute[i] = 0.0; // изначально все вершины невидимы
         }
         
-        memoryMaskGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        gridGeometry.setAttribute('visibility', new THREE.BufferAttribute(visibilityAttribute, 1));
+    }
+    
+    /**
+     * Создание слоя конуса видимости
+     */
+    createVisionConeLayer() {
+        // Создаем базовую геометрию (будет обновляться каждый кадр)
+        const initialShape = new THREE.Shape();
+        initialShape.moveTo(0, 0);
+        initialShape.lineTo(5, 5);
+        initialShape.lineTo(-5, 5);
+        initialShape.lineTo(0, 0);
+        
+        // Маска для затемнения невидимых областей
+        const maskMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8,
+            depthTest: false,
+            depthWrite: false
+        });
+        
+        // Создаем пустую маску (будет обновляться каждый кадр)
+        const worldSize = this.gridSize * 1.5;
+        const maskGeometry = new THREE.PlaneGeometry(worldSize, worldSize);
+        this.visibilityMask = new THREE.Mesh(maskGeometry, maskMaterial);
+        this.visibilityMask.rotation.x = -Math.PI / 2; // горизонтально
+        this.visibilityMask.position.y = 0.1; // ниже всех остальных слоёв
+        this.visibilityMask.renderOrder = 999; // рендерим последним
+        this.visibilityGroup.add(this.visibilityMask);
     }
     
     /**
@@ -145,130 +220,32 @@ export class VisionSystem {
         try {
             // Получаем актуальные данные от игрока
             const playerPos = this.player.position;
-            const direction = this.player.getViewDirection();
-            // Пытаемся получить текущий угол обзора, если метод существует
-            const viewAngle = typeof this.player.getViewAngle === 'function' 
-                ? this.player.getViewAngle() 
-                : this.fov;
+            let playerDirection = { x: 0, z: -1 }; // направление по умолчанию
             
-            // Получаем мировую позицию игрока
-            const origin = {
-                x: playerPos.x,
-                y: playerPos.y + 1.0, // на уровне "глаз" игрока
-                z: playerPos.z
-            };
-            
-            // Вычисляем направление взгляда игрока в радианах
-            const directionAngle = Math.atan2(direction.x, direction.z);
-            const halfFov = (viewAngle / 2) * (Math.PI / 180); // половина угла обзора в радианах
-            
-            // Формируем список углов для выпуска лучей
-            const angles = [];
-            for (let i = 0; i < this.rayCount; i++) {
-                const angle = directionAngle - halfFov + (i / (this.rayCount - 1)) * 2 * halfFov;
-                angles.push(angle);
+            // Пытаемся получить текущее направление взгляда, если метод существует
+            if (typeof this.player.getViewDirection === 'function') {
+                playerDirection = this.player.getViewDirection();
             }
             
-            // Вычисляем точки контура видимой области
-            const points = [];
+            // Определяем текущий угол обзора в зависимости от состояния игрока
+            let currentFov = this.normalFov;
+            if (this.player.isAiming) {
+                currentFov = this.aimingFov;
+            } else if (this.player.isRunning) {
+                currentFov = this.runningFov;
+            }
+            // Преобразуем угол из градусов в радианы
+            const fovRadians = (currentFov * Math.PI) / 180;
             
-            // Первая точка - позиция игрока
-            points.push(new THREE.Vector2(0, 0));
+            // Вычисляем направление взгляда игрока в радианах
+            const directionAngle = Math.atan2(playerDirection.x, playerDirection.z);
             
-            // Выпускаем лучи и находим точки пересечения
-            angles.forEach(angle => {
-                // Для каждого угла получаем единичный вектор направления
-                const dir = {
-                    x: Math.sin(angle),
-                    y: 0,  // луч идет горизонтально
-                    z: Math.cos(angle)
-                };
-                
-                // Выполняем рейкаст
-                let endPoint;
-                
-                // Проверяем доступные методы в world
-                if (typeof this.world.castRayAndGetNormal === 'function') {
-                    // Новый способ рейкаста, рекомендуемый Rapier.js
-                    const raycastResult = this.world.castRayAndGetNormal(
-                        origin, 
-                        dir, 
-                        this.maxDistance, 
-                        true
-                    );
-                    
-                    const hit = raycastResult.hasHit ? raycastResult : null;
-                    
-                    if (hit !== null && hit.hasHit) {
-                        // Луч столкнулся с препятствием
-                        const hitDistance = hit.toi; // дистанция до точки столкновения
-                        
-                        // Немного уменьшаем дистанцию, чтобы избежать артефактов
-                        const safeDistance = hitDistance * 0.99;
-                        
-                        // Вычисляем координаты точки пересечения
-                        endPoint = {
-                            x: origin.x + dir.x * safeDistance,
-                            z: origin.z + dir.z * safeDistance
-                        };
-                    } else {
-                        // Луч не встретил препятствий, берем максимальную дистанцию
-                        endPoint = {
-                            x: origin.x + dir.x * this.maxDistance,
-                            z: origin.z + dir.z * this.maxDistance
-                        };
-                    }
-                } else if (typeof this.world.castRay === 'function') {
-                    // Старый способ рейкаста
-                    const ray = new RAPIER.Ray(origin, dir);
-                    const hit = this.world.castRay(ray, this.maxDistance, true);
-                    
-                    if (hit !== null) {
-                        // Луч столкнулся с препятствием
-                        const hitDistance = hit.toi * this.maxDistance * 0.99;
-                        
-                        // Вычисляем координаты точки пересечения
-                        endPoint = {
-                            x: origin.x + dir.x * hitDistance,
-                            z: origin.z + dir.z * hitDistance
-                        };
-                    } else {
-                        // Луч не встретил препятствий, берем максимальную дистанцию
-                        endPoint = {
-                            x: origin.x + dir.x * this.maxDistance,
-                            z: origin.z + dir.z * this.maxDistance
-                        };
-                    }
-                } else {
-                    // Если методы рейкаста недоступны, просто берем максимальную дистанцию
-                    console.warn('VisionSystem: методы рейкаста недоступны, используем максимальную дистанцию');
-                    endPoint = {
-                        x: origin.x + dir.x * this.maxDistance,
-                        z: origin.z + dir.z * this.maxDistance
-                    };
-                }
-                
-                // Добавляем точку в список (относительно позиции игрока)
-                points.push(new THREE.Vector2(
-                    endPoint.x - origin.x,
-                    endPoint.z - origin.z
-                ));
-                
-                // Обновляем карту посещенных областей
-                if (this.memoryEnabled) {
-                    this.markVisitedArea(endPoint.x, endPoint.z);
-                }
-            });
+            // Обновляем маску видимости
+            this.updateVisionMask(playerPos, directionAngle, fovRadians);
             
-            // Добавляем последнюю точку, чтобы замкнуть форму
-            points.push(points[1].clone());
-            
-            // Создаем форму конуса видимости
-            this.updateVisibilityShape(points);
-            
-            // Обновляем карту посещенных областей
+            // Обновляем карту памяти
             if (this.memoryEnabled) {
-                this.updateMemoryMap();
+                this.updateMemoryMap(playerPos, directionAngle, fovRadians);
             }
         } catch (error) {
             console.error('VisionSystem: ошибка при обновлении:', error);
@@ -276,10 +253,128 @@ export class VisionSystem {
     }
     
     /**
+     * Обновление маски видимости (конуса зрения)
+     * @param {Object} playerPos - позиция игрока
+     * @param {number} directionAngle - угол направления взгляда в радианах
+     * @param {number} fovRadians - угол обзора в радианах
+     */
+    updateVisionMask(playerPos, directionAngle, fovRadians) {
+        // Половина угла обзора
+        const halfFov = fovRadians / 2;
+        
+        // Определяем точку старта лучей
+        const origin = {
+            x: playerPos.x,
+            y: playerPos.y + 1.0, // на уровне "глаз" игрока
+            z: playerPos.z
+        };
+        
+        // Формируем список углов для выпуска лучей
+        const angles = [];
+        for (let i = 0; i < this.rayCount; i++) {
+            const angle = directionAngle - halfFov + (i / (this.rayCount - 1)) * fovRadians;
+            angles.push(angle);
+        }
+        
+        // Вычисляем точки контура видимой области
+        const points = [];
+        
+        // Добавляем первую точку - позиция игрока
+        points.push(new THREE.Vector2(0, 0));
+        
+        // Выпускаем лучи и находим точки пересечения
+        angles.forEach(angle => {
+            // Единичный вектор направления в горизонтальной плоскости
+            const dir = {
+                x: Math.sin(angle),
+                y: 0,
+                z: Math.cos(angle)
+            };
+            
+            // Выполняем рейкаст
+            let endPoint;
+            
+            if (this.world && typeof this.world.castRay === 'function') {
+                // Создаем луч Rapier
+                const ray = new RAPIER.Ray(origin, dir);
+                // Выполняем рейкаст в физическом мире
+                const hit = this.world.castRay(ray, this.maxDistance, true);
+                
+                if (hit !== null) {
+                    // Луч столкнулся с препятствием
+                    const hitDist = hit.toi; // time of impact
+                    const impactDistance = hitDist * this.maxDistance * 0.99;
+                    
+                    // Конечная точка чуть ближе точки столкновения
+                    endPoint = {
+                        x: origin.x + dir.x * impactDistance,
+                        z: origin.z + dir.z * impactDistance
+                    };
+                } else {
+                    // Луч не встретил препятствий
+                    endPoint = {
+                        x: origin.x + dir.x * this.maxDistance,
+                        z: origin.z + dir.z * this.maxDistance
+                    };
+                }
+            } else if (this.world && typeof this.world.castRayAndGetNormal === 'function') {
+                // Альтернативный метод рейкастинга
+                const raycastResult = this.world.castRayAndGetNormal(
+                    origin, 
+                    dir, 
+                    this.maxDistance, 
+                    true
+                );
+                
+                const hit = raycastResult.hasHit ? raycastResult : null;
+                
+                if (hit !== null && hit.hasHit) {
+                    const hitDistance = hit.toi;
+                    const safeDistance = hitDistance * 0.99;
+                    
+                    endPoint = {
+                        x: origin.x + dir.x * safeDistance,
+                        z: origin.z + dir.z * safeDistance
+                    };
+                } else {
+                    endPoint = {
+                        x: origin.x + dir.x * this.maxDistance,
+                        z: origin.z + dir.z * this.maxDistance
+                    };
+                }
+            } else {
+                // Если рейкастинг недоступен, используем максимальную дистанцию
+                endPoint = {
+                    x: origin.x + dir.x * this.maxDistance,
+                    z: origin.z + dir.z * this.maxDistance
+                };
+            }
+            
+            // Добавляем точку в список
+            points.push(new THREE.Vector2(
+                endPoint.x - origin.x,
+                endPoint.z - origin.z
+            ));
+            
+            // Отмечаем область как посещенную
+            if (this.memoryEnabled) {
+                this.markVisitedArea(endPoint.x, endPoint.z);
+            }
+        });
+        
+        // Добавляем последнюю точку, замыкающую форму
+        points.push(points[1].clone());
+        
+        // Создаем форму конуса видимости
+        this.updateVisibilityShape(points, playerPos);
+    }
+    
+    /**
      * Обновление формы видимости
      * @param {Array} points - точки контура видимой области
+     * @param {Object} playerPos - позиция игрока
      */
-    updateVisibilityShape(points) {
+    updateVisibilityShape(points, playerPos) {
         // Проверяем валидность точек
         if (!points || points.length < 3) {
             console.warn('VisionSystem: недостаточно точек для создания формы видимости');
@@ -287,13 +382,10 @@ export class VisionSystem {
         }
         
         try {
-            // Создаем новую форму
+            // Создаем форму конуса видимости
             const shape = new THREE.Shape();
-            
-            // Перемещаемся в первую точку
             shape.moveTo(points[0].x, points[0].y);
             
-            // Добавляем остальные точки
             for (let i = 1; i < points.length; i++) {
                 shape.lineTo(points[i].x, points[i].y);
             }
@@ -307,7 +399,7 @@ export class VisionSystem {
             outerShape.lineTo(-worldSize, worldSize);
             outerShape.lineTo(-worldSize, -worldSize);
             
-            // Вырезаем конус видимости из внешнего контура
+            // Вырезаем форму конуса
             outerShape.holes.push(shape);
             
             // Обновляем геометрию маски
@@ -320,9 +412,8 @@ export class VisionSystem {
                 // Создаем новую геометрию
                 this.visibilityMask.geometry = new THREE.ShapeGeometry(outerShape);
                 
-                // Перемещаем маску в позицию игрока
-                const playerPos = this.player.position;
-                this.visibilityMask.position.set(playerPos.x, 0.2, playerPos.z);
+                // Перемещаем в позицию игрока
+                this.visibilityMask.position.set(playerPos.x, 0.1, playerPos.z);
             }
         } catch (error) {
             console.error('VisionSystem: ошибка при обновлении формы видимости:', error);
@@ -330,27 +421,34 @@ export class VisionSystem {
     }
     
     /**
-     * Отметка посещенной области на карте
-     * @param {Number} x - координата X
-     * @param {Number} z - координата Z
+     * Отметка области как посещенной
+     * @param {number} x - координата X в мировом пространстве
+     * @param {number} z - координата Z в мировом пространстве
      */
     markVisitedArea(x, z) {
         // Преобразуем мировые координаты в координаты сетки
-        const gridX = Math.floor((x + 500) / this.cellSize);
-        const gridZ = Math.floor((z + 500) / this.cellSize);
+        const halfGridSize = this.gridSize / 2;
+        const gridX = Math.floor((x + halfGridSize) / this.cellSize);
+        const gridZ = Math.floor((z + halfGridSize) / this.cellSize);
         
-        // Проверяем, что координаты находятся в пределах сетки
-        if (gridX >= 0 && gridX < this.gridResolution && gridZ >= 0 && gridZ < this.gridResolution) {
-            // Отмечаем ячейку как посещенную
+        // Проверяем, что координаты внутри сетки
+        if (gridX >= 0 && gridX < this.gridResolution && 
+            gridZ >= 0 && gridZ < this.gridResolution) {
+            
+            // Отмечаем область как посещенную
             this.memoryGrid[gridX][gridZ] = 1;
             
             // Отмечаем соседние ячейки для плавного перехода
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
+            const radius = 1; // радиус влияния в ячейках сетки
+            
+            for (let dx = -radius; dx <= radius; dx++) {
+                for (let dz = -radius; dz <= radius; dz++) {
                     const nx = gridX + dx;
                     const nz = gridZ + dz;
                     
-                    if (nx >= 0 && nx < this.gridResolution && nz >= 0 && nz < this.gridResolution) {
+                    if (nx >= 0 && nx < this.gridResolution && 
+                        nz >= 0 && nz < this.gridResolution) {
+                        
                         // Устанавливаем значение не меньше 0.7 для соседних ячеек
                         this.memoryGrid[nx][nz] = Math.max(this.memoryGrid[nx][nz], 0.7);
                     }
@@ -360,59 +458,80 @@ export class VisionSystem {
     }
     
     /**
-     * Обновление карты посещенных областей
+     * Обновление карты памяти
+     * @param {Object} playerPos - позиция игрока
+     * @param {number} directionAngle - угол направления взгляда
+     * @param {number} fovRadians - угол обзора в радианах
      */
-    updateMemoryMap() {
-        if (!this.memoryEnabled || !this.memoryMask) return;
+    updateMemoryMap(playerPos, directionAngle, fovRadians) {
+        if (!this.memoryEnabled || !this.memoryMesh) return;
         
         try {
-            // Получаем текущую геометрию
-            const geometry = this.memoryMask.geometry;
-            
-            // Получаем атрибут цвета
-            let colors = geometry.attributes.color;
-            
-            // Если атрибут не существует, создаем его
-            if (!colors) {
-                const positions = geometry.attributes.position.array;
-                const colorsArray = new Float32Array(positions.length);
-                colors = new THREE.BufferAttribute(colorsArray, 3);
-                geometry.setAttribute('color', colors);
-            }
-            
-            // Обновляем цвета вершин на основе карты посещенных областей
-            const positions = geometry.attributes.position.array;
-            
-            for (let i = 0, j = 0; i < positions.length; i += 3, j++) {
-                // Получаем координаты вершины
-                const x = positions[i];
-                const z = positions[i + 2];
+            // Обновляем сетку памяти на маске тумана войны
+            if (this.fogOfWarMesh && this.fogOfWarMesh.material) {
+                // Здесь обычно используется шейдер или другой метод для 
+                // обновления маски на основе сетки памяти
                 
-                // Преобразуем мировые координаты в координаты сетки
-                const gridX = Math.floor((x + 500) / this.cellSize);
-                const gridZ = Math.floor((z + 500) / this.cellSize);
+                // В этой реализации для простоты мы просто накладываем
+                // маску поверх тех областей, которые не посещены
+
+                // Обновляем непрозрачность маски памяти в зависимости от стейта
+                // В полной реализации здесь было бы обновление шейдера
                 
-                // Проверяем, что координаты находятся в пределах сетки
-                if (gridX >= 0 && gridX < this.gridResolution && gridZ >= 0 && gridZ < this.gridResolution) {
-                    // Получаем значение ячейки (0 - не посещена, 1 - посещена)
-                    const visited = this.memoryGrid[gridX][gridZ];
-                    
-                    // Устанавливаем цвет вершины
-                    colors.array[i] = visited;     // R (0-1)
-                    colors.array[i + 1] = visited; // G (0-1)
-                    colors.array[i + 2] = visited; // B (0-1)
-                }
+                // Дополнительное: создание отверстий в тумане войны на основе сетки памяти
+                // Создаем геометрию для вырезания посещенных областей из тумана войны
+                // (Для прототипа не реализуем полностью)
             }
-            
-            // Отмечаем атрибут цвета как требующий обновления
-            colors.needsUpdate = true;
+
+            // В полной реализации здесь было бы обновление шейдера
+            // на основе карты посещенных областей
         } catch (error) {
-            console.error('VisionSystem: ошибка при обновлении карты посещенных областей:', error);
+            console.error('VisionSystem: ошибка при обновлении карты памяти:', error);
         }
     }
     
     /**
-     * Очистка ресурсов системы
+     * Изменение угла обзора
+     * @param {number} fov - новый угол обзора в градусах
+     */
+    setFov(fov) {
+        this.fov = fov;
+    }
+    
+    /**
+     * Изменение максимальной дистанции видимости
+     * @param {number} distance - новая максимальная дистанция
+     */
+    setMaxDistance(distance) {
+        this.maxDistance = distance;
+    }
+    
+    /**
+     * Изменение количества лучей
+     * @param {number} count - новое количество лучей
+     */
+    setRayCount(count) {
+        this.rayCount = count;
+    }
+    
+    /**
+     * Очистка карты памяти (сброс посещенных областей)
+     */
+    clearMemory() {
+        if (!this.memoryEnabled) return;
+        
+        // Сбрасываем сетку памяти
+        for (let i = 0; i < this.gridResolution; i++) {
+            for (let j = 0; j < this.gridResolution; j++) {
+                this.memoryGrid[i][j] = 0;
+            }
+        }
+        
+        console.log('VisionSystem: карта памяти очищена');
+    }
+    
+    /**
+     * Освобождение ресурсов системы
      */
     dispose() {
         try {
@@ -427,15 +546,26 @@ export class VisionSystem {
                 this.visibilityGroup.remove(this.visibilityMask);
             }
             
-            // Удаляем маску посещенных областей
-            if (this.memoryMask) {
-                if (this.memoryMask.geometry) {
-                    this.memoryMask.geometry.dispose();
+            // Удаляем маску памяти
+            if (this.memoryMesh) {
+                if (this.memoryMesh.geometry) {
+                    this.memoryMesh.geometry.dispose();
                 }
-                if (this.memoryMask.material) {
-                    this.memoryMask.material.dispose();
+                if (this.memoryMesh.material) {
+                    this.memoryMesh.material.dispose();
                 }
-                this.visibilityGroup.remove(this.memoryMask);
+                this.visibilityGroup.remove(this.memoryMesh);
+            }
+            
+            // Удаляем маску тумана войны
+            if (this.fogOfWarMesh) {
+                if (this.fogOfWarMesh.geometry) {
+                    this.fogOfWarMesh.geometry.dispose();
+                }
+                if (this.fogOfWarMesh.material) {
+                    this.fogOfWarMesh.material.dispose();
+                }
+                this.visibilityGroup.remove(this.fogOfWarMesh);
             }
             
             // Удаляем группу видимости
@@ -445,7 +575,8 @@ export class VisionSystem {
             
             // Сбрасываем переменные
             this.visibilityMask = null;
-            this.memoryMask = null;
+            this.memoryMesh = null;
+            this.fogOfWarMesh = null;
             this.visibilityGroup = null;
             this.memoryGrid = [];
             this.isInitialized = false;
