@@ -1,4 +1,4 @@
-<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TDS Escape</title><link rel="stylesheet" href="styles.css"><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r133/three.min.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script><script src="libs/rapier/rapier.js"></script></head><body><div id="game-container"><div id="loading-screen"><div class="loader"></div><div class="loading-text">Загрузка игры...</div><div id="loading-status">Инициализация...</div></div><canvas id="game-canvas" class="hidden"></canvas><div id="hud" class="hidden"><div id="health-bar"><div class="health-value"></div></div><div id="ammo-counter"></div><div id="weapon-info"></div><div id="status-messages"></div></div><div id="main-menu" class="hidden"><h1>TDS Escape</h1><button id="start-game">Начать игру</button> <button id="settings">Настройки</button><div class="version">v0.1.0</div></div><div id="inventory-screen" class="hidden"><div class="inventory-title">Инвентарь</div><div class="inventory-grid"></div><div class="equipped-items"></div><button id="close-inventory">Закрыть</button></div></div><script>// Переменная для отслеживания состояния загрузки
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TDS Escape</title><link rel="stylesheet" href="styles.css"><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r133/three.min.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script><script src="libs/rapier/rapier.js" type="module"></script><script src="libs/rapier-loader.js"></script></head><body><div id="game-container"><div id="loading-screen"><div class="loader"></div><div class="loading-text">Загрузка игры...</div><div id="loading-status">Инициализация...</div></div><canvas id="game-canvas" class="hidden"></canvas><div id="hud" class="hidden"><div id="health-bar"><div class="health-value"></div></div><div id="ammo-counter"></div><div id="weapon-info"></div><div id="status-messages"></div></div><div id="main-menu" class="hidden"><h1>TDS Escape</h1><button id="start-game">Начать игру</button> <button id="settings">Настройки</button><div class="version">v0.1.0</div></div><div id="inventory-screen" class="hidden"><div class="inventory-title">Инвентарь</div><div class="inventory-grid"></div><div class="equipped-items"></div><button id="close-inventory">Закрыть</button></div></div><script>// Переменная для отслеживания состояния загрузки
         window.gameLoaded = false;
         
         // Функция для автозапуска игры
@@ -15,66 +15,68 @@
         }
         
         // Функция для загрузки скрипта игры
-        // Функция для загрузки скрипта игры
         function loadGameScript() {
-        console.log('Загрузка скрипта игры...');
-        var script = document.createElement('script');
-        script.src = 'bundle.js';
-        script.type = 'text/javascript';
-        script.onload = function() {
-        console.log('Скрипт игры загружен, инициализация...');
-        // Запускаем проверку готовности игры
-        setTimeout(autoStartGame, 500);
-        };
-        script.onerror = function(error) {
-        console.error('Ошибка загрузки скрипта игры:', error);
-        document.getElementById('loading-status').textContent = 'Ошибка загрузки. Попробуйте обновить страницу.';
-        };
-        document.body.appendChild(script);
+            console.log('Загрузка скрипта игры...');
+            var script = document.createElement('script');
+            script.src = 'bundle.js';
+            script.type = 'text/javascript';
+            script.onload = function() {
+                console.log('Скрипт игры загружен, инициализация...');
+                // Запускаем проверку готовности игры
+                setTimeout(autoStartGame, 500);
+            };
+            script.onerror = function(error) {
+                console.error('Ошибка загрузки скрипта игры:', error);
+                document.getElementById('loading-status').textContent = 'Ошибка загрузки. Попробуйте обновить страницу.';
+            };
+            document.body.appendChild(script);
         }
-
+        
         // Запускаем загрузку при готовности DOM
         document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM загружен, проверка библиотек...');
-    
-        // Сначала проверяем загрузку THREE
-        if (typeof THREE === 'undefined') {
-        console.error('Ошибка загрузки THREE.js!');
-        document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Попробуйте обновить страницу.';
-        return;
-        }
-    
-        console.log('THREE.js загружен успешно');
-        document.getElementById('loading-status').textContent = 'Инициализация Rapier.js...';
-    
-        // Проверяем доступность RAPIER и инициализируем его
-        if (typeof RAPIER !== 'undefined' && typeof RAPIER.init === 'function') {
-        RAPIER.init().then(() => {
-            console.log('Библиотеки загружены успешно');
-            document.getElementById('loading-status').textContent = 'Загрузка игровых ресурсов...';
-            loadGameScript();
-        }).catch(error => {
-            console.error('Ошибка инициализации RAPIER:', error);
-            document.getElementById('loading-status').textContent = 'Ошибка инициализации Rapier.js. Попробуйте обновить страницу.';
+            console.log('DOM загружен, проверка библиотек...');
+            
+            // Сначала проверяем загрузку THREE
+            if (typeof THREE === 'undefined') {
+                console.error('Ошибка загрузки THREE.js!');
+                document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Попробуйте обновить страницу.';
+                return;
+            }
+            
+            console.log('THREE.js загружен успешно');
+            document.getElementById('loading-status').textContent = 'Инициализация Rapier.js...';
+            
+            // Используем наш загрузчик для инициализации Rapier
+            if (window.RAPIER_LOADER) {
+                window.RAPIER_LOADER.loadRapier()
+                    .then(() => {
+                        console.log('Библиотеки загружены успешно');
+                        document.getElementById('loading-status').textContent = 'Загрузка игровых ресурсов...';
+                        loadGameScript();
+                    })
+                    .catch(error => {
+                        console.error('Ошибка инициализации RAPIER:', error);
+                        document.getElementById('loading-status').textContent = 'Ошибка инициализации Rapier.js. Попробуйте обновить страницу.';
+                    });
+            } else {
+                console.error('Загрузчик RAPIER не найден');
+                document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Отсутствует загрузчик Rapier.';
+            }
         });
-        } else {
-        console.error('Ошибка загрузки библиотек! RAPIER не найден.');
-        document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Проверьте, что файлы Rapier.js присутствуют.';
-        }
-    });
-
+        
         // Резервный запуск при полной загрузке страницы
         window.addEventListener('load', function() {
             console.log('Страница полностью загружена');
             if (!window.gameLoaded) {
                 console.log('Запуск резервного механизма загрузки');
-                // Проверяем RAPIER перед запуском
-                if (typeof RAPIER !== 'undefined' && typeof RAPIER.init === 'function') {
-                    RAPIER.init().then(() => {
-                        loadGameScript();
-                    }).catch(error => {
-                        console.error('Ошибка инициализации RAPIER (резервный):', error);
-                    });
+                if (window.RAPIER_LOADER) {
+                    window.RAPIER_LOADER.loadRapier()
+                        .then(() => {
+                            loadGameScript();
+                        })
+                        .catch(error => {
+                            console.error('Ошибка инициализации RAPIER (резервный):', error);
+                        });
                 } else {
                     loadGameScript();
                 }
