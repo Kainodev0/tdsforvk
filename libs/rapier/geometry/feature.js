@@ -1,0 +1,1 @@
+export var FeatureType;!function(e){e[e.Vertex=0]="Vertex",e[e.Edge=1]="Edge",e[e.Face=2]="Face",e[e.Unknown=3]="Unknown"}(FeatureType||(FeatureType={}));

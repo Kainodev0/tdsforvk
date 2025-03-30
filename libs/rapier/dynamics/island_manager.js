@@ -1,0 +1,1 @@
+import{RawIslandManager}from"../raw";export class IslandManager{free(){this.raw&&this.raw.free(),this.raw=void 0}constructor(a){this.raw=a||new RawIslandManager}forEachActiveRigidBodyHandle(a){this.raw.forEachActiveRigidBodyHandle(a)}}

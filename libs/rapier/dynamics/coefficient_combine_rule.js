@@ -1,0 +1,1 @@
+export var CoefficientCombineRule;!function(e){e[e.Average=0]="Average",e[e.Min=1]="Min",e[e.Multiply=2]="Multiply",e[e.Max=3]="Max"}(CoefficientCombineRule||(CoefficientCombineRule={}));
