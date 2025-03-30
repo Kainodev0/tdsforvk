@@ -1,7 +1,7 @@
 /**
- * Система визуализации конуса зрения и тумана войны в стиле Darkwood
- * Использует Rapier.js для расчета рейкастов и Three.js для отображения
- */
+* Система визуализации конуса зрения и тумана войны в стиле Darkwood
+* Использует Rapier.js для расчета рейкастов и Three.js для отображения
+*/
 export class VisionSystem {
     /**
      * @param {Object} options - настройки системы визуализации
@@ -20,14 +20,14 @@ export class VisionSystem {
             console.error('VisionSystem: не указаны обязательные параметры (scene, player)');
             return;
         }
-
+ 
         this.scene = options.scene;
         this.world = options.world; // Может быть undefined на момент создания
         this.player = options.player;
         
         // Настройки по умолчанию
         this.fov = options.fov !== undefined ? options.fov : 90; // угол обзора в градусах
-        this.rayCount = options.rayCount || 50; // количество лучей
+        this.rayCount = options.rayCount || 60; // количество лучей (было 50, оптимизировано)
         this.maxDistance = options.maxDistance || 50; // максимальная дистанция обзора
         this.memoryEnabled = options.memoryEnabled !== undefined ? options.memoryEnabled : true; // сохранение посещенных областей
         this.blurEdges = options.blurEdges !== undefined ? options.blurEdges : true; // размытие краев конуса зрения
@@ -55,6 +55,8 @@ export class VisionSystem {
         this.isRapierChecked = false;
         this.initializationPromise = null;
         this.lastErrorTime = 0;
+        this.updateInterval = options.updateInterval || 0; // 0 = каждый кадр, иначе мс между обновлениями
+        this.lastUpdateTime = 0;
         this.errorCooldown = 5000; // Пауза между повторными логами ошибок (мс)
         
         // Инициализация сетки памяти
@@ -65,7 +67,7 @@ export class VisionSystem {
         // Группа для всех элементов системы видимости
         this.visibilityGroup = new THREE.Group();
         this.scene.add(this.visibilityGroup);
-
+ 
         // Асинхронная инициализация
         this.init();
     }
@@ -114,17 +116,10 @@ export class VisionSystem {
         return new Promise((resolve) => {
             // Функция для проверки доступности Rapier
             const checkRapier = () => {
-                // Проверяем различные варианты доступности Rapier
-                if (typeof RAPIER !== 'undefined') {
-                    console.log('VisionSystem: RAPIER доступен как глобальный объект');
-                    this.isRapierReady = true;
-                    this.isRapierChecked = true;
-                    resolve(true);
-                    return;
-                }
-                
-                if (typeof window !== 'undefined' && window.RAPIER) {
-                    console.log('VisionSystem: RAPIER доступен как window.RAPIER');
+                // Проверяем доступность Rapier у нас
+                const RAPIER = this.getRapierInstance();
+                if (RAPIER) {
+                    console.log('VisionSystem: RAPIER доступен');
                     this.isRapierReady = true;
                     this.isRapierChecked = true;
                     resolve(true);
@@ -155,7 +150,23 @@ export class VisionSystem {
             checkRapier();
         });
     }
-
+ 
+    /**
+     * Получение экземпляра RAPIER из разных источников
+     * @returns {Object|null} - объект RAPIER или null, если он недоступен
+     */
+    getRapierInstance() {
+        if (typeof RAPIER !== 'undefined') {
+            return RAPIER;
+        }
+        
+        if (typeof window !== 'undefined' && window.RAPIER) {
+            return window.RAPIER;
+        }
+        
+        return null;
+    }
+ 
     /**
      * Инициализация слоев видимости
      */
@@ -312,6 +323,13 @@ export class VisionSystem {
         if (!this.player || !this.world) {
             return;
         }
+ 
+        // Проверяем, не слишком ли рано для обновления (для оптимизации)
+        const now = Date.now();
+        if (this.updateInterval > 0 && now - this.lastUpdateTime < this.updateInterval) {
+            return;
+        }
+        this.lastUpdateTime = now;
         
         try {
             // Получаем актуальные данные от игрока
@@ -370,60 +388,81 @@ export class VisionSystem {
             return;
         }
         
-        // Половина угла обзора
-        const halfFov = fovRadians / 2;
-        
-        // Определяем точку старта лучей
-        const origin = {
-            x: playerPos.x,
-            y: playerPos.y + 1.0, // на уровне "глаз" игрока
-            z: playerPos.z
-        };
-        
-        // Формируем список углов для выпуска лучей
-        const angles = [];
-        for (let i = 0; i < this.rayCount; i++) {
-            const angle = directionAngle - halfFov + (i / (this.rayCount - 1)) * fovRadians;
-            angles.push(angle);
-        }
-        
-        // Вычисляем точки контура видимой области
-        const points = [];
-        
-        // Добавляем первую точку - позиция игрока
-        points.push(new THREE.Vector2(0, 0));
-        
-        // Убеждаемся, что RAPIER определен перед использованием
-        const RAPIER = this.getRapierInstance();
-        if (!RAPIER) {
-            console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
-            return;
-        }
-        
-        // Выпускаем лучи и находим точки пересечения
-        angles.forEach(angle => {
-            // Единичный вектор направления в горизонтальной плоскости
-            const dir = {
-                x: Math.sin(angle),
-                y: 0,
-                z: Math.cos(angle)
+        try {
+            // Получаем экземпляр RAPIER
+            const RAPIER = this.getRapierInstance();
+            if (!RAPIER) {
+                console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
+                return;
+            }
+            
+            // Половина угла обзора
+            const halfFov = fovRadians / 2;
+            
+            // Определяем точку старта лучей
+            const origin = {
+                x: playerPos.x,
+                y: playerPos.y + 1.0, // на уровне "глаз" игрока
+                z: playerPos.z
             };
             
-            // Выполняем рейкаст
-            let endPoint;
+            // Формируем список углов для выпуска лучей
+            const angles = [];
+            for (let i = 0; i < this.rayCount; i++) {
+                const angle = directionAngle - halfFov + (i / (this.rayCount - 1)) * fovRadians;
+                angles.push(angle);
+            }
             
-            try {
-                // Проверяем наличие метода castRay у world
-                if (typeof this.world.castRay === 'function') {
-                    // Создаем луч Rapier
-                    const ray = new RAPIER.Ray(origin, dir);
+            // Вычисляем точки контура видимой области
+            const points = [];
+            
+            // Добавляем первую точку - позиция игрока
+            points.push(new THREE.Vector2(0, 0));
+            
+            // Выпускаем лучи и находим точки пересечения
+            angles.forEach(angle => {
+                // Единичный вектор направления в горизонтальной плоскости
+                const dir = {
+                    x: Math.sin(angle),
+                    y: 0,
+                    z: Math.cos(angle)
+                };
+                
+                // Выполняем рейкаст
+                let endPoint;
+                
+                try {
+                    // Создаем луч Rapier (с проверкой существования конструктора)
+                    let ray;
+                    if (typeof RAPIER.Ray === 'function') {
+                        ray = new RAPIER.Ray(origin, dir);
+                    } else if (RAPIER.Ray) {
+                        ray = RAPIER.Ray.new(origin, dir);
+                    } else {
+                        // Если Ray недоступен, используем базовое значение
+                        endPoint = {
+                            x: origin.x + dir.x * this.maxDistance,
+                            z: origin.z + dir.z * this.maxDistance
+                        };
+                        points.push(new THREE.Vector2(
+                            endPoint.x - origin.x,
+                            endPoint.z - origin.z
+                        ));
+                        return; // Выход из текущей итерации forEach
+                    }
                     
                     // Выполняем рейкаст в физическом мире
-                    const hit = this.world.castRay(ray, this.maxDistance, true);
+                    let hit = null;
+                    if (typeof this.world.castRay === 'function') {
+                        hit = this.world.castRay(ray, this.maxDistance, true);
+                    } else if (typeof this.world.castRayAndGetNormal === 'function') {
+                        const result = this.world.castRayAndGetNormal(origin, dir, this.maxDistance, true);
+                        hit = result.hasHit ? result : null;
+                    }
                     
-                    if (hit !== null) {
+                    if (hit) {
                         // Луч столкнулся с препятствием
-                        const hitDist = hit.toi; // time of impact
+                        const hitDist = typeof hit.toi === 'function' ? hit.toi() : hit.toi;
                         const impactDistance = hitDist * this.maxDistance * 0.99;
                         
                         // Конечная точка чуть ближе точки столкновения
@@ -438,80 +477,37 @@ export class VisionSystem {
                             z: origin.z + dir.z * this.maxDistance
                         };
                     }
-                } else if (typeof this.world.castRayAndGetNormal === 'function') {
-                    // Альтернативный метод рейкастинга
-                    const raycastResult = this.world.castRayAndGetNormal(
-                        origin, 
-                        dir, 
-                        this.maxDistance, 
-                        true
-                    );
-                    
-                    const hit = raycastResult.hasHit ? raycastResult : null;
-                    
-                    if (hit !== null && hit.hasHit) {
-                        const hitDistance = hit.toi;
-                        const safeDistance = hitDistance * 0.99;
-                        
-                        endPoint = {
-                            x: origin.x + dir.x * safeDistance,
-                            z: origin.z + dir.z * safeDistance
-                        };
-                    } else {
-                        endPoint = {
-                            x: origin.x + dir.x * this.maxDistance,
-                            z: origin.z + dir.z * this.maxDistance
-                        };
-                    }
-                } else {
-                    // Если рейкастинг недоступен, используем максимальную дистанцию
+                } catch (error) {
+                    console.error('VisionSystem: ошибка при выполнении рейкаста:', error);
+                    // В случае ошибки используем максимальную дистанцию
                     endPoint = {
                         x: origin.x + dir.x * this.maxDistance,
                         z: origin.z + dir.z * this.maxDistance
                     };
                 }
-            } catch (error) {
-                // При ошибке используем максимальную дистанцию
-                console.warn('VisionSystem: ошибка при рейкасте:', error.message);
-                endPoint = {
-                    x: origin.x + dir.x * this.maxDistance,
-                    z: origin.z + dir.z * this.maxDistance
-                };
+                
+                // Добавляем точку в список
+                points.push(new THREE.Vector2(
+                    endPoint.x - origin.x,
+                    endPoint.z - origin.z
+                ));
+                
+                // Отмечаем область как посещенную
+                if (this.memoryEnabled) {
+                    this.markVisitedArea(endPoint.x, endPoint.z);
+                }
+            });
+            
+            // Добавляем последнюю точку, замыкающую форму
+            if (points.length > 1) {
+                points.push(points[1].clone());
             }
             
-            // Добавляем точку в список
-            points.push(new THREE.Vector2(
-                endPoint.x - origin.x,
-                endPoint.z - origin.z
-            ));
-            
-            // Отмечаем область как посещенную
-            if (this.memoryEnabled) {
-                this.markVisitedArea(endPoint.x, endPoint.z);
-            }
-        });
-        
-        // Добавляем последнюю точку, замыкающую форму
-        points.push(points[1].clone());
-        
-        // Создаем форму конуса видимости
-        this.updateVisibilityShape(points, playerPos);
-    }
-    
-    /**
-     * Получение экземпляра RAPIER из разных источников
-     * @returns {Object|null} - объект RAPIER или null, если он недоступен
-     */
-    getRapierInstance() {
-        if (typeof RAPIER !== 'undefined') {
-            return RAPIER;
+            // Создаем форму конуса видимости
+            this.updateVisibilityShape(points, playerPos);
+        } catch (error) {
+            console.error('VisionSystem: ошибка при обновлении маски видимости:', error);
         }
-        
-        if (typeof window !== 'undefined' && window.RAPIER) {
-            return window.RAPIER;
-        }
-        
-        return null;
     }
     
     /**
@@ -619,7 +615,7 @@ export class VisionSystem {
                 
                 // В этой реализации для простоты мы просто накладываем
                 // маску поверх тех областей, которые не посещены
-
+ 
                 // Обновляем непрозрачность маски памяти в зависимости от стейта
                 // В полной реализации здесь было бы обновление шейдера
                 
@@ -627,7 +623,7 @@ export class VisionSystem {
                 // Создаем геометрию для вырезания посещенных областей из тумана войны
                 // (Для прототипа не реализуем полностью)
             }
-
+ 
             // В полной реализации здесь было бы обновление шейдера
             // на основе карты посещенных областей
         } catch (error) {
@@ -676,62 +672,62 @@ export class VisionSystem {
     }
     
     /**
-     * Освобождение ресурсов системы
-     */
-    dispose() {
-        try {
-            // Удаляем маску видимости
-            if (this.visibilityMask) {
-                if (this.visibilityMask.geometry) {
-                    this.visibilityMask.geometry.dispose();
-                }
-                if (this.visibilityMask.material) {
-                    this.visibilityMask.material.dispose();
-                }
-                this.visibilityGroup.remove(this.visibilityMask);
+    * Освобождение ресурсов системы
+    */
+   dispose() {
+    try {
+        // Удаляем маску видимости
+        if (this.visibilityMask) {
+            if (this.visibilityMask.geometry) {
+                this.visibilityMask.geometry.dispose();
             }
-            
-            // Удаляем маску памяти
-            if (this.memoryMesh) {
-                if (this.memoryMesh.geometry) {
-                    this.memoryMesh.geometry.dispose();
-                }
-                if (this.memoryMesh.material) {
-                    this.memoryMesh.material.dispose();
-                }
-                this.visibilityGroup.remove(this.memoryMesh);
+            if (this.visibilityMask.material) {
+                this.visibilityMask.material.dispose();
             }
-            
-            // Удаляем маску тумана войны
-            if (this.fogOfWarMesh) {
-                if (this.fogOfWarMesh.geometry) {
-                    this.fogOfWarMesh.geometry.dispose();
-                }
-                if (this.fogOfWarMesh.material) {
-                    this.fogOfWarMesh.material.dispose();
-                }
-                this.visibilityGroup.remove(this.fogOfWarMesh);
-            }
-            
-            // Удаляем группу видимости
-            if (this.visibilityGroup) {
-                this.scene.remove(this.visibilityGroup);
-            }
-            
-            // Сбрасываем переменные
-            this.visibilityMask = null;
-            this.memoryMesh = null;
-            this.fogOfWarMesh = null;
-            this.visibilityGroup = null;
-            this.memoryGrid = [];
-            this.isInitialized = false;
-            this.isRapierReady = false;
-            this.isRapierChecked = false;
-            this.initializationPromise = null;
-            
-            console.log('VisionSystem: ресурсы успешно освобождены');
-        } catch (error) {
-            console.error('VisionSystem: ошибка при освобождении ресурсов:', error);
+            this.visibilityGroup.remove(this.visibilityMask);
         }
+        
+        // Удаляем маску памяти
+        if (this.memoryMesh) {
+            if (this.memoryMesh.geometry) {
+                this.memoryMesh.geometry.dispose();
+            }
+            if (this.memoryMesh.material) {
+                this.memoryMesh.material.dispose();
+            }
+            this.visibilityGroup.remove(this.memoryMesh);
+        }
+        
+        // Удаляем маску тумана войны
+        if (this.fogOfWarMesh) {
+            if (this.fogOfWarMesh.geometry) {
+                this.fogOfWarMesh.geometry.dispose();
+            }
+            if (this.fogOfWarMesh.material) {
+                this.fogOfWarMesh.material.dispose();
+            }
+            this.visibilityGroup.remove(this.fogOfWarMesh);
+        }
+        
+        // Удаляем группу видимости
+        if (this.visibilityGroup) {
+            this.scene.remove(this.visibilityGroup);
+        }
+        
+        // Сбрасываем переменные
+        this.visibilityMask = null;
+        this.memoryMesh = null;
+        this.fogOfWarMesh = null;
+        this.visibilityGroup = null;
+        this.memoryGrid = [];
+        this.isInitialized = false;
+        this.isRapierReady = false;
+        this.isRapierChecked = false;
+        this.initializationPromise = null;
+        
+        console.log('VisionSystem: ресурсы успешно освобождены');
+    } catch (error) {
+        console.error('VisionSystem: ошибка при освобождении ресурсов:', error);
     }
+}
 }
