@@ -35,11 +35,27 @@
         // Запускаем загрузку при готовности DOM
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM загружен, проверка библиотек...');
-            // Проверяем загрузку библиотек
-            if (typeof THREE !== 'undefined' && typeof RAPIER !== 'undefined') {
-                console.log('Библиотеки загружены успешно');
-                document.getElementById('loading-status').textContent = 'Загрузка игровых ресурсов...';
-                loadGameScript();
+            
+            // Сначала проверяем загрузку THREE
+            if (typeof THREE === 'undefined') {
+                console.error('Ошибка загрузки THREE.js!');
+                document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Попробуйте обновить страницу.';
+                return;
+            }
+            
+            console.log('THREE.js загружен успешно');
+            document.getElementById('loading-status').textContent = 'Инициализация Rapier.js...';
+            
+            // Затем явно инициализируем RAPIER (ключевое изменение!)
+            if (typeof RAPIER !== 'undefined' && typeof RAPIER.init === 'function') {
+                RAPIER.init().then(() => {
+                    console.log('Библиотеки загружены успешно');
+                    document.getElementById('loading-status').textContent = 'Загрузка игровых ресурсов...';
+                    loadGameScript();
+                }).catch(error => {
+                    console.error('Ошибка инициализации RAPIER:', error);
+                    document.getElementById('loading-status').textContent = 'Ошибка инициализации Rapier.js. Попробуйте обновить страницу.';
+                });
             } else {
                 console.error('Ошибка загрузки библиотек!');
                 document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Попробуйте обновить страницу.';
@@ -51,6 +67,15 @@
             console.log('Страница полностью загружена');
             if (!window.gameLoaded) {
                 console.log('Запуск резервного механизма загрузки');
-                loadGameScript();
+                // Проверяем RAPIER перед запуском
+                if (typeof RAPIER !== 'undefined' && typeof RAPIER.init === 'function') {
+                    RAPIER.init().then(() => {
+                        loadGameScript();
+                    }).catch(error => {
+                        console.error('Ошибка инициализации RAPIER (резервный):', error);
+                    });
+                } else {
+                    loadGameScript();
+                }
             }
         });</script><script defer="defer" src="./bundle.js"></script></body></html>
