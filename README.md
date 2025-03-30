@@ -4,7 +4,7 @@
 
 ## Демо
 
-Вы можете поиграть в текущую версию проекта здесь: [TDS Escape Demo]([https://yourusername.github.io/tds-escape/](https://kainodev0.github.io/tdsforvk/])
+Вы можете поиграть в текущую версию проекта здесь: [TDS Escape Demo](https://kainodev0.github.io/tdsforvk/)
 
 ## Особенности
 
