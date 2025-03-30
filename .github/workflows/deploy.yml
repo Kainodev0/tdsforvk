@@ -25,13 +25,10 @@ jobs:
       - name: Install dependencies
         run: npm install
         
-      - name: Create .nojekyll file
-        run: touch .nojekyll
-        
       - name: Build project
         run: npm run build
         
-      - name: Ensure .nojekyll exists in dist
+      - name: Create .nojekyll file directly in dist
         run: touch dist/.nojekyll
         
       - name: Deploy to GitHub Pages

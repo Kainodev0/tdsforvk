@@ -51,7 +51,7 @@ module.exports = (env, argv) => {
         patterns: [
           { from: 'client/assets', to: 'assets' },
           { from: 'client/styles.css', to: 'styles.css' },
-          { from: '.nojekyll', to: '.nojekyll' }
+          { from: '.nojekyll', to: '.nojekyll', toType: 'file' }  // явно указываем, что это файл
         ]
       })
     ],
