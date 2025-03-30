@@ -2,7 +2,7 @@
 
 import { HUD } from '../ui/hud.js';
 import { InventoryUI } from '../ui/inventory.js';
-import { log } from './GameCore.js';
+import { log } from './gameCore.js';
 
 /**
  * Класс для управления пользовательским интерфейсом игры

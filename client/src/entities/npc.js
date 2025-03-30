@@ -247,3 +247,93 @@ export class NPC {
         this.isAttacking = true;
         setTimeout(() => {
             this.isAttacking = false;
+        }, 500); // Добавляем длительность анимации атаки
+        
+        // Здесь будет логика нанесения урона игроку
+        // В прототипе просто выводим сообщение
+        console.log(`NPC ${this.id} атакует игрока!`);
+    }
+    
+    /**
+     * Обновление движения NPC
+     * @param {number} deltaTime - прошедшее время с предыдущего кадра
+     */
+    updateMovement(deltaTime) {
+        // Проверяем, нужно ли двигаться
+        const distance = this.calculateDistance(this.position, this.targetPosition);
+        
+        if (distance < 0.1) {
+            // Достигли цели
+            this.isMoving = false;
+            return;
+        }
+        
+        // Вычисляем направление к цели
+        const dirX = this.targetPosition.x - this.position.x;
+        const dirZ = this.targetPosition.z - this.position.z;
+        const length = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        
+        // Нормализуем вектор направления
+        const normalizedDirX = dirX / length;
+        const normalizedDirZ = dirZ / length;
+        
+        // Определяем угол поворота (для модели)
+        this.rotation.y = Math.atan2(normalizedDirX, normalizedDirZ);
+        
+        // Устанавливаем флаг движения
+        this.isMoving = true;
+        
+        // Вычисляем новую позицию с учетом скорости
+        this.position.x += normalizedDirX * this.speed * deltaTime;
+        this.position.z += normalizedDirZ * this.speed * deltaTime;
+    }
+    
+    /**
+     * Обновление модели NPC
+     */
+    updateModel() {
+        if (this.mesh && this.renderer) {
+            // Обновляем позицию меша
+            this.renderer.updateObjectTransform(this.mesh, this.position, this.rotation);
+            
+            // В будущем здесь будет управление анимациями
+        }
+    }
+    
+    /**
+     * Получение урона
+     * @param {number} damage - количество урона
+     * @returns {boolean} - жив ли NPC после урона
+     */
+    takeDamage(damage) {
+        // Уменьшаем здоровье
+        this.health = Math.max(0, this.health - damage);
+        
+        // Проверяем, жив ли NPC
+        if (this.health <= 0 && !this.isDead) {
+            this.die();
+            return false;
+        }
+        
+        // Повышаем тревогу при получении урона
+        this.alertness = 100;
+        
+        return true;
+    }
+    
+    /**
+     * Смерть NPC
+     */
+    die() {
+        this.isDead = true;
+        this.isMoving = false;
+        
+        // В будущем здесь будет анимация смерти
+        console.log(`NPC ${this.id} умер!`);
+        
+        // Оповещаем игру о смерти NPC
+        if (this.game && typeof this.game.onNPCDeath === 'function') {
+            this.game.onNPCDeath(this);
+        }
+    }
+}
