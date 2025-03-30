@@ -5,7 +5,7 @@ import { Collider, ColliderSet } from "../geometry";
 /**
  * The integer identifier of a collider added to a `ColliderSet`.
  */
-export declare type RigidBodyHandle = number;
+export type RigidBodyHandle = number;
 /**
  * The simulation status of a rigid-body.
  */

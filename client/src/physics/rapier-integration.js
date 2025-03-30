@@ -2,6 +2,9 @@
  * Модуль для инициализации и интеграции Rapier.js
  */
 
+// Максимальное время ожидания инициализации RAPIER в миллисекундах
+const MAX_WAIT_TIME = 10000;
+
 /**
  * Инициализация Rapier.js
  * @returns {Promise} - промис, который разрешается, когда Rapier.js инициализирован
@@ -23,9 +26,11 @@ export async function initRapier() {
                 console.log('Инициализируем Rapier.js через RAPIER.init()');
                 await RAPIER.init();
                 RAPIER._initialized = true;
+                console.log('Rapier.js успешно инициализирован');
                 return RAPIER;
             } catch (error) {
                 console.error('Ошибка при инициализации Rapier.js:', error);
+                throw error;
             }
         } else {
             // Если init не существует, возможно, это уже рабочий экземпляр RAPIER
@@ -43,18 +48,20 @@ export async function initRapier() {
                 console.log('Инициализируем Rapier.js из window.RAPIER');
                 await window.RAPIER.init();
                 window.RAPIER._initialized = true;
+                console.log('window.RAPIER успешно инициализирован');
             } else {
                 console.log('Используем готовый Rapier.js из window.RAPIER');
+                window.RAPIER._initialized = true;
             }
             return window.RAPIER;
         }
         
-        console.warn('Rapier.js не найден в глобальном пространстве имен, ждем загрузки...');
+        console.log('Rapier.js не найден в глобальном пространстве имен, ждем загрузки...');
         
-        // Ожидаем, что RAPIER будет загружен и инициализирован
-        return await waitForRapier();
+        // Ожидаем, что RAPIER будет загружен и инициализирован с таймаутом
+        return await waitForRapierWithTimeout(MAX_WAIT_TIME);
     } catch (error) {
-        console.warn('Не удалось инициализировать Rapier.js:', error.message);
+        console.error('Не удалось инициализировать Rapier.js:', error.message);
         
         // Возвращаем заглушку для предотвращения критических ошибок
         return createRapierStub();
@@ -62,17 +69,26 @@ export async function initRapier() {
 }
 
 /**
- * Ожидание загрузки и инициализации RAPIER
- * @returns {Promise} - промис, который разрешается с объектом RAPIER
+ * Ожидание загрузки и инициализации RAPIER с таймаутом
+ * @param {number} maxWaitTime - максимальное время ожидания в мс
+ * @returns {Promise} - промис, который разрешается с объектом RAPIER или отклоняется по таймауту
  */
-async function waitForRapier() {
+async function waitForRapierWithTimeout(maxWaitTime) {
     return new Promise((resolve, reject) => {
         let attempts = 0;
         const maxAttempts = 20;
         const checkInterval = 300; // ms
+        const startTime = Date.now();
         
         const checkRapier = () => {
             attempts++;
+            const currentTime = Date.now();
+            
+            // Проверяем, не превышен ли таймаут
+            if (currentTime - startTime > maxWaitTime) {
+                reject(new Error(`Таймаут ожидания инициализации RAPIER (${maxWaitTime}ms)`));
+                return;
+            }
             
             // Проверяем глобальный RAPIER
             if (typeof RAPIER !== 'undefined') {
@@ -117,8 +133,7 @@ async function waitForRapier() {
             }
             
             if (attempts >= maxAttempts) {
-                reject(new Error(`RAPIER не загрузился после ${maxAttempts} попыток`));
-                return;
+                console.warn(`RAPIER не загрузился после ${maxAttempts} попыток, но продолжаем попытки в пределах таймаута...`);
             }
             
             setTimeout(checkRapier, checkInterval);

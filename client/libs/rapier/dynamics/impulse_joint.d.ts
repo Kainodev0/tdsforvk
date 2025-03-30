@@ -5,7 +5,7 @@ import { RigidBodySet } from "./rigid_body_set";
 /**
  * The integer identifier of a collider added to a `ColliderSet`.
  */
-export declare type ImpulseJointHandle = number;
+export type ImpulseJointHandle = number;
 /**
  * An enum grouping all possible types of joints:
  *

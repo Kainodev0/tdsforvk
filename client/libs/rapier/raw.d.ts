@@ -1,1 +1,1 @@
-export * from "./rapier_wasm3d"
+export * from "./rapier_wasm3d";

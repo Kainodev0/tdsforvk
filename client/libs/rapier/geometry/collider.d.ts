@@ -57,7 +57,7 @@ export declare enum ActiveCollisionTypes {
 /**
  * The integer identifier of a collider added to a `ColliderSet`.
  */
-export declare type ColliderHandle = number;
+export type ColliderHandle = number;
 /**
  * A geometric entity that can be attached to a body so it can be affected
  * by contacts and proximity queries.
