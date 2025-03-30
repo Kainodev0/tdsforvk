@@ -103,8 +103,8 @@ class Game {
             this.updateLoadingStatus('Инициализация UI компонентов...');
             // Инициализация UI компонентов
             this.ui = {
-                hud: new HUD(this.hudElement),
-                inventory: new InventoryUI(this.inventoryScreen)
+                hud: this.hudElement ? new HUD(this.hudElement) : null,
+                inventory: this.inventoryScreen ? new InventoryUI(this.inventoryScreen) : null
             };
             
             // Настройка обработчиков событий

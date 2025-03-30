@@ -31,10 +31,10 @@ export class HUD {
      * Инициализация HUD
      */
     initialize() {
-        // Обновляем элементы с начальными значениями
-        this.updateHealthBar();
-        this.updateAmmoCounter();
-        this.updateWeaponInfo();
+        // Обновляем элементы с начальными значениями, если они существуют
+        if (this.healthBar) this.updateHealthBar();
+        if (this.ammoCounter) this.updateAmmoCounter();
+        if (this.weaponInfo) this.updateWeaponInfo();
     }
     
     /**
@@ -64,17 +64,17 @@ export class HUD {
      */
     updateHealthBar() {
         // Обновляем ширину полоски здоровья
-        if (this.healthBar) {
-            this.healthBar.style.width = `${this.health}%`;
-            
-            // Меняем цвет в зависимости от количества здоровья
-            if (this.health > 70) {
-                this.healthBar.style.backgroundColor = '#4CAF50'; // Зеленый
-            } else if (this.health > 30) {
-                this.healthBar.style.backgroundColor = '#FFC107'; // Желтый
-            } else {
-                this.healthBar.style.backgroundColor = '#F44336'; // Красный
-            }
+        if (!this.healthBar) return;
+        
+        this.healthBar.style.width = `${this.health}%`;
+        
+        // Меняем цвет в зависимости от количества здоровья
+        if (this.health > 70) {
+            this.healthBar.style.backgroundColor = '#4CAF50'; // Зеленый
+        } else if (this.health > 30) {
+            this.healthBar.style.backgroundColor = '#FFC107'; // Желтый
+        } else {
+            this.healthBar.style.backgroundColor = '#F44336'; // Красный
         }
     }
     
@@ -82,18 +82,16 @@ export class HUD {
      * Обновление счетчика патронов
      */
     updateAmmoCounter() {
-        if (this.ammoCounter) {
-            this.ammoCounter.textContent = `${this.ammo}`;
-        }
+        if (!this.ammoCounter) return;
+        this.ammoCounter.textContent = `${this.ammo}`;
     }
     
     /**
      * Обновление информации об оружии
      */
     updateWeaponInfo() {
-        if (this.weaponInfo) {
-            this.weaponInfo.textContent = this.weapon;
-        }
+        if (!this.weaponInfo) return;
+        this.weaponInfo.textContent = this.weapon;
     }
     
     /**

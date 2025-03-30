@@ -13,12 +13,17 @@
 </head>
 <body>
     <div id="game-container">
+        <!-- Загрузочный экран -->
         <div id="loading-screen">
             <div class="loader"></div>
             <div class="loading-text">Загрузка игры...</div>
             <div id="loading-status">Инициализация...</div>
         </div>
+        
+        <!-- Игровой холст -->
         <canvas id="game-canvas" class="hidden"></canvas>
+        
+        <!-- HUD элементы -->
         <div id="hud" class="hidden">
             <div id="health-bar">
                 <div class="health-value"></div>
@@ -26,6 +31,22 @@
             <div id="ammo-counter"></div>
             <div id="weapon-info"></div>
             <div id="status-messages"></div>
+        </div>
+        
+        <!-- Главное меню -->
+        <div id="main-menu" class="hidden">
+            <h1>TDS Escape</h1>
+            <button id="start-game">Начать игру</button>
+            <button id="settings">Настройки</button>
+            <div class="version">v0.1.0</div>
+        </div>
+        
+        <!-- Экран инвентаря -->
+        <div id="inventory-screen" class="hidden">
+            <div class="inventory-title">Инвентарь</div>
+            <div class="inventory-grid"></div>
+            <div class="equipped-items"></div>
+            <button id="close-inventory">Закрыть</button>
         </div>
     </div>
     
