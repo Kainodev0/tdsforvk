@@ -12,6 +12,7 @@ if (!fs.existsSync(nojekyllPath)) {
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
+  // Используем относительные пути для GitHub Pages
   const publicPath = isProduction ? './' : '/';
   
   return {
@@ -62,7 +63,6 @@ module.exports = (env, argv) => {
         '@ui': path.resolve(__dirname, 'client/src/ui/'),
         '@physics': path.resolve(__dirname, 'client/src/physics/')
       },
-      // Добавляем fallback для Node.js модулей
       fallback: {
         "path": false,
         "fs": false
@@ -77,16 +77,13 @@ module.exports = (env, argv) => {
       hot: true,
       open: true
     },
-    // Source maps для отладки
     devtool: isProduction ? 'source-map' : 'eval-source-map',
     mode: isProduction ? 'production' : 'development',
-    // Добавляем игнорирование ошибок для WebGL импортов
     ignoreWarnings: [/Failed to parse source map/],
-    // Добавляем настройки для бандла
     performance: {
       hints: isProduction ? 'warning' : false,
-      maxAssetSize: 1024000, // 1MB
-      maxEntrypointSize: 1024000 // 1MB
+      maxAssetSize: 1024000,
+      maxEntrypointSize: 1024000
     }
   };
 };
