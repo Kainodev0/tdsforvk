@@ -52,7 +52,8 @@ module.exports = (env, argv) => {
           { from: 'client/assets', to: 'assets' },
           { from: 'client/styles.css', to: 'styles.css' },
           { from: '.nojekyll', to: '.nojekyll', toType: 'file' },
-          { from: 'client/libs/rapier', to: 'libs/rapier' } // Добавить эту строку
+          { from: 'client/libs/rapier', to: 'libs/rapier' },
+          { from: 'client/libs/rapier-loader.js', to: 'libs/rapier-loader.js' }
         ]
       })
     ],

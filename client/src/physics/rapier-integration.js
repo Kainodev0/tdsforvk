@@ -12,6 +12,20 @@ const MAX_WAIT_TIME = 10000;
 export async function initRapier() {
     console.log('Начинаем инициализацию Rapier.js...');
     
+    // Проверяем, доступен ли загрузчик RAPIER
+    if (typeof window !== 'undefined' && window.RAPIER_LOADER) {
+        console.log('Используем загрузчик RAPIER_LOADER...');
+        try {
+            const rapier = await window.RAPIER_LOADER.loadRapier();
+            console.log('RAPIER_LOADER успешно инициализировал Rapier');
+            return rapier;
+        } catch (error) {
+            console.error('Ошибка инициализации через RAPIER_LOADER:', error);
+            throw error;
+        }
+    }
+    
+    // Если загрузчик отсутствует, используем стандартный механизм
     // Проверяем, загружен ли уже Rapier.js
     if (typeof RAPIER !== 'undefined') {
         // Проверяем, был ли RAPIER уже инициализирован
@@ -87,6 +101,22 @@ async function waitForRapierWithTimeout(maxWaitTime) {
             // Проверяем, не превышен ли таймаут
             if (currentTime - startTime > maxWaitTime) {
                 reject(new Error(`Таймаут ожидания инициализации RAPIER (${maxWaitTime}ms)`));
+                return;
+            }
+            
+            // Проверяем доступность загрузчика
+            if (typeof window !== 'undefined' && window.RAPIER_LOADER) {
+                window.RAPIER_LOADER.loadRapier()
+                    .then(rapier => {
+                        console.log('RAPIER загружен через RAPIER_LOADER');
+                        resolve(rapier);
+                    })
+                    .catch(error => {
+                        console.error('Ошибка загрузки через RAPIER_LOADER:', error);
+                        
+                        // Продолжаем проверять стандартные методы
+                        setTimeout(checkRapier, checkInterval);
+                    });
                 return;
             }
             
@@ -210,6 +240,12 @@ function createRapierStub() {
  * @returns {boolean} - результат проверки
  */
 export function isRapierAvailable() {
+    // Проверка через загрузчик, если он доступен
+    if (typeof window !== 'undefined' && window.RAPIER_LOADER) {
+        return window.RAPIER_LOADER.isRapierReady();
+    }
+    
+    // Стандартная проверка
     return (typeof RAPIER !== 'undefined' && RAPIER._initialized) || 
            (typeof window !== 'undefined' && window.RAPIER && window.RAPIER._initialized);
 }
@@ -219,6 +255,12 @@ export function isRapierAvailable() {
  * @returns {Object|null} - объект Rapier.js или null, если он не загружен
  */
 export function getRapier() {
+    // Получение через загрузчик, если он доступен
+    if (typeof window !== 'undefined' && window.RAPIER_LOADER) {
+        return window.RAPIER_LOADER.getRapier();
+    }
+    
+    // Стандартное получение
     if (typeof RAPIER !== 'undefined' && RAPIER._initialized) {
         return RAPIER;
     }
