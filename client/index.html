@@ -9,7 +9,6 @@
     <!-- Three.js и другие библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r133/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="bundle.js"></script>
     
     <!-- Загрузка Rapier -->
 </head>
@@ -51,76 +50,5 @@
             <button id="close-inventory">Закрыть</button>
         </div>
     </div>
-    
-    <!-- Скрипт для автоматического запуска -->
-    <script>
-        // Переменная для отслеживания состояния загрузки
-        window.gameLoaded = false;
-        
-        // Функция для автозапуска игры
-        function autoStartGame() {
-            if (window.game && typeof window.game.startGame === 'function') {
-                // Запускаем игру
-                window.game.startGame();
-                console.log('Игра автоматически запущена');
-                window.gameLoaded = true;
-            } else {
-                console.log('Ожидание загрузки игры...');
-                setTimeout(autoStartGame, 500);
-            }
-        }
-        
-        // Функция для загрузки скрипта игры
-        function loadGameScript() {
-            console.log('Загрузка скрипта игры...');
-            var script = document.createElement('script');
-            script.src = 'bundle.js';
-            script.type = 'text/javascript';
-            script.onload = function() {
-                console.log('Скрипт игры загружен, инициализация...');
-                // Запускаем проверку готовности игры
-                setTimeout(autoStartGame, 500);
-            };
-            script.onerror = function(error) {
-                console.error('Ошибка загрузки скрипта игры:', error);
-                document.getElementById('loading-status').textContent = 'Ошибка загрузки. Попробуйте обновить страницу.';
-            };
-            document.body.appendChild(script);
-        }
-        
-        // Запускаем загрузку при готовности DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM загружен, проверка библиотек...');
-            
-            // Сначала проверяем загрузку THREE
-            if (typeof THREE === 'undefined') {
-                console.error('Ошибка загрузки THREE.js!');
-                document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Попробуйте обновить страницу.';
-                return;
-            }
-            
-            console.log('THREE.js загружен успешно');
-            document.getElementById('loading-status').textContent = 'Инициализация Rapier.js...';
-        });
-        
-        // Резервный запуск при полной загрузке страницы
-        window.addEventListener('load', function() {
-            console.log('Страница полностью загружена');
-            if (!window.gameLoaded) {
-                console.log('Запуск резервного механизма загрузки');
-                if (window.RAPIER_LOADER) {
-                    window.RAPIER_LOADER.loadRapier()
-                        .then(() => {
-                            loadGameScript();
-                        })
-                        .catch(error => {
-                            console.error('Ошибка инициализации RAPIER (резервный):', error);
-                        });
-                } else {
-                    loadGameScript();
-                }
-            }
-        });
-    </script>
 </body>
 </html>
