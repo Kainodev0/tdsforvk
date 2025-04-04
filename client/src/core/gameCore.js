@@ -62,9 +62,13 @@ export class GameCore {
             // Загрузка ресурсов и настройка
             await this.loadResources();
             log('Ресурсы загружены');
+
+            // Настройка событий
+            this.events.setupEventListeners();
             
             // Показываем главное меню
             this.ui.showMainMenu();
+            
         } catch (error) {
             log(`Ошибка инициализации: ${error.message}`);
             this.ui.showErrorScreen(`Произошла ошибка при инициализации: ${error.message}`);
