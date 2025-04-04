@@ -37,11 +37,12 @@ export class GameCore {
         
         // Игровой таймер и физика
         this.gameTime = 0;
-        this.physicsUpdateRate = 1/60; // 60 обновлений физики в секунду
+        this.physicsUpdateRate = 1 / 60;
         this.physicsAccumulator = 0;
         this.lastFrameTime = 0;
-        
+
         // Запуск процесса инициализации
+        console.log('🧠 GameCore: constructor запущен');
         this.init();
     }
     
@@ -49,6 +50,7 @@ export class GameCore {
      * Асинхронная инициализация всех компонентов игры
      */
     async init() {
+        console.log('🔄 GameCore: init начат');
         try {
             this.ui.updateLoadingStatus('Инициализация компонентов...');
             
@@ -141,6 +143,7 @@ export class GameCore {
      * Начало игры
      */
     async startGame() {
+        console.log('🎮 GameCore: старт игры');
         try {
             log('Запуск игры...');
             
