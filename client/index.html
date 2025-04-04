@@ -9,6 +9,7 @@
     <!-- Three.js и другие библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r133/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="bundle.js"></script>
     
     <!-- Загрузка Rapier -->
 </head>
@@ -100,23 +101,6 @@
             
             console.log('THREE.js загружен успешно');
             document.getElementById('loading-status').textContent = 'Инициализация Rapier.js...';
-            
-            // Используем наш загрузчик для инициализации Rapier
-            if (window.RAPIER_LOADER) {
-                window.RAPIER_LOADER.loadRapier()
-                    .then(() => {
-                        console.log('Библиотеки загружены успешно');
-                        document.getElementById('loading-status').textContent = 'Загрузка игровых ресурсов...';
-                        loadGameScript();
-                    })
-                    .catch(error => {
-                        console.error('Ошибка инициализации RAPIER:', error);
-                        document.getElementById('loading-status').textContent = 'Ошибка инициализации Rapier.js. Попробуйте обновить страницу.';
-                    });
-            } else {
-                console.error('Загрузчик RAPIER не найден');
-                document.getElementById('loading-status').textContent = 'Ошибка загрузки библиотек. Отсутствует загрузчик Rapier.';
-            }
         });
         
         // Резервный запуск при полной загрузке страницы
