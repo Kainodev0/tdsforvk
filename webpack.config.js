@@ -44,9 +44,9 @@ module.exports = (env, argv) => {
     plugins: [
       new HtmlWebpackPlugin({
         template: './client/index.html',
-        filename: 'index.html',
-        inject: 'body'
-      }),
+        inject: 'body',
+        scriptLoading: 'module' // 👈 ВАЖНО!
+      })
       new CopyWebpackPlugin({
         patterns: [
           { from: 'client/assets', to: 'assets' },
