@@ -7,7 +7,7 @@ export class Game extends GameCore {
   static RAPIER = RAPIER;
 }
 
-// ⬇️ Инициализация игры
+// Запускаем игру после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 DOM загружен. Запускаем игру...');
   window.game = new Game();

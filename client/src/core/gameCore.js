@@ -247,31 +247,3 @@ export class GameCore {
         }
     }
 }
-
-// Инициализация игры при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        log('DOMContentLoaded: инициализация игры');
-        // Создаем игровой объект
-        window.game = new GameCore();
-    } catch (error) {
-        console.error('Критическая ошибка при инициализации игры:', error);
-        
-        // Показываем сообщение об ошибке
-        const errorMessage = document.createElement('div');
-        errorMessage.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 20px;
-            background-color: #f44336;
-            color: white;
-            text-align: center;
-            font-size: 18px;
-            z-index: 9999;
-        `;
-        errorMessage.textContent = `Критическая ошибка: ${error.message}`;
-        document.body.appendChild(errorMessage);
-    }
-});
