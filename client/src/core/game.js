@@ -1,3 +1,5 @@
+console.log('📦 game.js загружен');
+
 import { GameCore } from './gameCore.js';
 import * as RAPIER from '@dimforge/rapier3d';
 

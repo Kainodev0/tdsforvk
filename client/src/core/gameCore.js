@@ -23,6 +23,7 @@ export function log(message) {
  */
 export class GameCore {
     constructor() {
+        console.log('🧠 GameCore constructor');
         log('Инициализация игры...');
         
         // Привязка контекста this к методам
