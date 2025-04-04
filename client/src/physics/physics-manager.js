@@ -2,7 +2,7 @@
  * Менеджер физики, отвечающий за инициализацию и управление физикой игры
  * Использует Rapier.js для физических расчетов
  */
-import { initRapier, isRapierAvailable, getRapier } from './rapier-integration.js';
+import { initRapier } from './rapier-integration.js';
 
 export class PhysicsManager {
     constructor() {
@@ -32,22 +32,6 @@ export class PhysicsManager {
                 // Инициализируем Rapier.js
                 this.RAPIER = await initRapier();
                 
-                // Проверяем, доступен ли RAPIER
-                if (!this.RAPIER && !isRapierAvailable()) {
-                    console.error('PhysicsManager: RAPIER не определен. Убедитесь, что библиотека загружена.');
-                    resolve(false);
-                    return;
-                }
-                
-                // Если RAPIER всё ещё не доступен, используем глобальный объект
-                if (!this.RAPIER) {
-                    this.RAPIER = getRapier();
-                    if (!this.RAPIER) {
-                        console.error('PhysicsManager: не удалось получить объект RAPIER.');
-                        resolve(false);
-                        return;
-                    }
-                }
 
                 // Инициализируем физический мир
                 console.log('PhysicsManager: создание физического мира...');
