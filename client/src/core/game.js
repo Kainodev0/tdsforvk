@@ -1,5 +1,9 @@
-// client/src/core/game.js
 import { GameCore } from './gameCore.js';
+import RAPIER from '@dimforge/rapier3d';
 
-// Экспортируем класс Game для обратной совместимости
-export class Game extends GameCore {}
+// Инициализация Rapier перед запуском игры
+await RAPIER.init();
+
+export class Game extends GameCore {
+  static RAPIER = RAPIER; // 👈 если хочешь передавать его в другие модули
+}
