@@ -3,18 +3,7 @@
 import * as RAPIER from '@dimforge/rapier3d';
 
 /**
- * Инициализация Rapier.js и возврат API
- * @returns {Promise<Object>} - модуль RAPIER после инициализации
- */
-export async function initRapier() {
-    console.log('🛠 Инициализация Rapier 3D через модуль...');
-    await RAPIER.init();
-    console.log('✅ Rapier 3D инициализирован');
-    return RAPIER;
-}
-
-/**
- * Получение готового объекта RAPIER (если он уже инициализирован)
+ * Возврат API RAPIER — без инициализации, она не требуется
  */
 export function getRapier() {
     return RAPIER;

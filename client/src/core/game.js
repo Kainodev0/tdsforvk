@@ -1,9 +1,9 @@
 import { GameCore } from './gameCore.js';
 import * as RAPIER from '@dimforge/rapier3d';
 
-// Инициализация Rapier перед запуском игры
-await RAPIER.init();
+// Нет необходимости в init() — он не существует в этом пакете
+console.log('✅ Rapier 3D модуль загружен');
 
 export class Game extends GameCore {
-  static RAPIER = RAPIER; // 👈 если хочешь передавать его в другие модули
+  static RAPIER = RAPIER;
 }
