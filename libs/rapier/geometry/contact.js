@@ -1,1 +1,0 @@
-import{VectorOps}from"../math";export class ShapeContact{constructor(t,o,r,a,n){this.distance=t,this.point1=o,this.point2=r,this.normal1=a,this.normal2=n}static fromRaw(t){if(!t)return null;const o=new ShapeContact(t.distance(),VectorOps.fromRaw(t.point1()),VectorOps.fromRaw(t.point2()),VectorOps.fromRaw(t.normal1()),VectorOps.fromRaw(t.normal2()));return t.free(),o}}

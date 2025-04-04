@@ -1,1 +1,0 @@
-export var ActiveHooks;!function(E){E[E.NONE=0]="NONE",E[E.FILTER_CONTACT_PAIRS=1]="FILTER_CONTACT_PAIRS",E[E.FILTER_INTERSECTION_PAIRS=2]="FILTER_INTERSECTION_PAIRS"}(ActiveHooks||(ActiveHooks={}));export var SolverFlags;!function(E){E[E.EMPTY=0]="EMPTY",E[E.COMPUTE_IMPULSE=1]="COMPUTE_IMPULSE"}(SolverFlags||(SolverFlags={}));
