@@ -1,5 +1,5 @@
 import { GameCore } from './gameCore.js';
-import RAPIER from '@dimforge/rapier3d';
+import * as RAPIER from '@dimforge/rapier3d';
 
 // Инициализация Rapier перед запуском игры
 await RAPIER.init();

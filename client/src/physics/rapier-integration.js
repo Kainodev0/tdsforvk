@@ -1,6 +1,6 @@
 // client/src/physics/rapier-integration.js
 
-import RAPIER from '@dimforge/rapier3d';
+import * as RAPIER from '@dimforge/rapier3d';
 
 /**
  * Инициализация Rapier.js и возврат API
