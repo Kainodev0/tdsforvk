@@ -105,6 +105,7 @@ export class GameWorld {
                 scene: this.game.renderer.scene,
                 world: this.game.physics.getWorld(),
                 player: this.player,
+                rapier: this.game.RAPIER,
                 fov: 90, // Начальный угол обзора
                 rayCount: 60, // Количество лучей
                 maxDistance: 50, // Максимальная дистанция видимости
