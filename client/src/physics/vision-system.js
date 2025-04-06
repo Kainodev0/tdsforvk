@@ -369,9 +369,9 @@ export class VisionSystem {
      * @param {number} fovRadians - угол обзора в радианах
      */
     updateVisionMask(playerPos, directionAngle, fovRadians) {
-        // Защитная проверка - Rapier должен быть доступен
-        if (!this.isRapierReady || !this.world) {
-            return;
+        if (!this.isInitialized || !this.isRapierReady) {
+          console.warn('⏳ VisionSystem: система ещё не готова, пропускаем updateVisionMask');
+          return;
         }
         
         // Защитная проверка объектов
@@ -384,9 +384,9 @@ export class VisionSystem {
             const RAPIER = this.RAPIER;
             console.log('🧪 [vision-system.js:384] RAPIER в updateVisibilityMask:', RAPIER);
             if (!RAPIER) {
-                console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
-                return;
-            }
+            console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
+            return;
+        }
             
             // Половина угла обзора
             const halfFov = fovRadians / 2;
