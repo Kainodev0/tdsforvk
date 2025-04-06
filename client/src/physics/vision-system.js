@@ -24,6 +24,7 @@ export class VisionSystem {
         this.scene = options.scene;
         this.world = options.world; // Может быть undefined на момент создания
         this.player = options.player;
+        this.RAPIER = options.rapier;
         
         // Настройки по умолчанию
         this.fov = options.fov !== undefined ? options.fov : 90; // угол обзора в градусах
@@ -117,7 +118,7 @@ export class VisionSystem {
             // Функция для проверки доступности Rapier
             const checkRapier = () => {
                 // Проверяем доступность Rapier у нас
-                const RAPIER = this.getRapierInstance();
+                const RAPIER = this.RAPIER;
                 if (RAPIER) {
                     console.log('VisionSystem: RAPIER доступен');
                     this.isRapierReady = true;
@@ -155,18 +156,7 @@ export class VisionSystem {
      * Получение экземпляра RAPIER из разных источников
      * @returns {Object|null} - объект RAPIER или null, если он недоступен
      */
-    getRapierInstance() {
-        if (typeof RAPIER !== 'undefined') {
-            return RAPIER;
-        }
-        
-        if (typeof window !== 'undefined' && window.RAPIER) {
-            return window.RAPIER;
-        }
-        
-        return null;
-    }
- 
+
     /**
      * Инициализация слоев видимости
      */
@@ -390,7 +380,7 @@ export class VisionSystem {
         
         try {
             // Получаем экземпляр RAPIER
-            const RAPIER = this.getRapierInstance();
+            const RAPIER = this.RAPIER;
             if (!RAPIER) {
                 console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
                 return;
