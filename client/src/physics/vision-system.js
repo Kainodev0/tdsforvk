@@ -436,10 +436,15 @@ export class VisionSystem {
                             x: origin.x + dir.x * this.maxDistance,
                             z: origin.z + dir.z * this.maxDistance
                         };
-                        points.push(new THREE.Vector2(
-                            endPoint.x - origin.x,
-                            endPoint.z - origin.z
-                        ));
+                        const dx = endPoint.x - origin.x;
+                        const dz = endPoint.z - origin.z;
+
+                        if (isNaN(dx) || isNaN(dz)) {
+                        console.warn('❌ NaN координаты в точке зрения:', { dx, dz, endPoint, origin });
+                        return; // Пропускаем некорректную точку
+                        }
+
+                        points.push(new THREE.Vector2(dx, dz));
                         return; // Выход из текущей итерации forEach
                     }
                     
