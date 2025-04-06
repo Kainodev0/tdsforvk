@@ -8,6 +8,7 @@ import { Renderer } from './renderer.js';
 import { InputHandler } from './input.js';
 import { NetworkManager } from './network.js';
 import { PhysicsManager } from '../physics/physics-manager.js';
+import { Game } from './game.js'; // 👈 Обязательно!
 
 // Функция для логирования
 export function log(message) {
