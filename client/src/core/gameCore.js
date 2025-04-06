@@ -149,6 +149,10 @@ export class GameCore {
      */
     async startGame() {
         console.log('🎮 GameCore: старт игры');
+
+        this.RAPIER = Game.RAPIER;
+        console.log('🧪 this.RAPIER установлен:', this.RAPIER);
+
         try {
             log('Запуск игры...');
             

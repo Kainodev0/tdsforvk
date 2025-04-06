@@ -119,6 +119,7 @@ export class VisionSystem {
             const checkRapier = () => {
                 // Проверяем доступность Rapier у нас
                 const RAPIER = this.RAPIER;
+                console.log('🧪 [vision-system.js:122] RAPIER в updateVisibilityMask:', RAPIER);
                 if (RAPIER) {
                     console.log('VisionSystem: RAPIER доступен');
                     this.isRapierReady = true;
@@ -381,6 +382,7 @@ export class VisionSystem {
         try {
             // Получаем экземпляр RAPIER
             const RAPIER = this.RAPIER;
+            console.log('🧪 [vision-system.js:384] RAPIER в updateVisibilityMask:', RAPIER);
             if (!RAPIER) {
                 console.warn('VisionSystem: RAPIER не определен при обновлении маски видимости');
                 return;

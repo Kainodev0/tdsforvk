@@ -3,6 +3,7 @@ console.log('📦 game.js загружен');
 import { GameCore } from './gameCore.js';
 import * as RAPIER from '@dimforge/rapier3d';
 
+console.log('🧪 Проверка RAPIER (из импорта):', RAPIER);
 console.log('✅ Rapier 3D модуль загружен');
 
 export class Game extends GameCore {
