@@ -1,4 +1,6 @@
 // client/src/core/renderer.js
+import * as THREE from 'three'; // Убедитесь, что импорт Three.js есть
+import { GeometryValidator } from '../utils/geometry-validator.js'; // Путь может отличаться
 
 /**
  * Класс отвечающий за рендеринг игры с использованием Three.js
@@ -60,6 +62,21 @@ export class Renderer {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
+    }
+    
+    /**
+     * Рендеринг сцены с предварительной валидацией геометрии
+     */
+    render() {
+        // Валидация сцены перед рендерингом
+        if (this.scene) {
+            GeometryValidator.validateScene(this.scene);
+        }
+        
+        // Обычный рендеринг
+        if (this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
     }
     
     /**
