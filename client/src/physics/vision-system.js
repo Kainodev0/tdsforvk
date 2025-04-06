@@ -499,6 +499,19 @@ export class VisionSystem {
             if (points.length > 1) {
                 points.push(points[1].clone());
             }
+
+            // 🔍 Проверка на наличие некорректных точек
+            const invalidPoint = points.find((p, i) => {
+            if (!p || typeof p.x !== 'number' || typeof p.y !== 'number' || isNaN(p.x) || isNaN(p.y)) {
+            console.error(`❌ VisionSystem: Некорректная точка в индексе ${i}:`, p);
+            return true;
+        }
+            return false;
+            });
+            if (invalidPoint) {
+            console.warn('⏭️ Пропускаем обновление видимости из-за ошибочных точек');
+            return;
+            }
             
             // Создаем форму конуса видимости
             this.updateVisibilityShape(points, playerPos);
@@ -512,6 +525,7 @@ export class VisionSystem {
      * @param {Array} points - точки контура видимой области
      * @param {Object} playerPos - позиция игрока
      */
+    
     updateVisibilityShape(points, playerPos) {
         // Проверяем валидность точек
         if (!points || points.length < 3) {
@@ -530,6 +544,13 @@ export class VisionSystem {
             
             // Создаем внешний контур (большой прямоугольник)
             const worldSize = this.maxDistance * 2;
+
+            for (const [i, p] of points.entries()) {
+                if (!p || isNaN(p.x) || isNaN(p.y)) {
+                  console.error(`❌ Некорректная точка в ShapeGeometry [${i}]:`, p);
+                }
+              }
+
             const outerShape = new THREE.Shape();
             outerShape.moveTo(-worldSize, -worldSize);
             outerShape.lineTo(worldSize, -worldSize);
