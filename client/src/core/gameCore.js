@@ -4,6 +4,7 @@ import { GameUI } from './gameUI.js';
 import { GameWorld } from './gameWorld.js';
 import { GameState } from './gameState.js';
 import { GameEvents } from './gameEvents.js';
+import { patchShapeGeometry } from './utils/three-patches.js';
 import { Renderer } from './renderer.js';
 import { InputHandler } from './input.js';
 import { NetworkManager } from './network.js';
@@ -25,6 +26,10 @@ export function log(message) {
 export class GameCore {
     constructor() {
         console.log('🧠 GameCore constructor');
+
+        // Применяем патч для THREE.ShapeGeometry
+        patchShapeGeometry();
+
         log('Инициализация игры...');
         
         // Привязка контекста this к методам
