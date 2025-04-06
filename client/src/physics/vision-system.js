@@ -549,6 +549,21 @@ export class VisionSystem {
                 
                 // Создаем новую геометрию
                 this.visibilityMask.geometry = new THREE.ShapeGeometry(outerShape);
+
+                // Проверка на NaN координаты в geometry
+                const posAttr = this.visibilityMask.geometry.attributes.position;
+                const array = posAttr.array;
+                for (let i = 0; i < array.length; i++) {
+                if (isNaN(array[i])) {
+                console.error('❌ Обнаружены NaN значения в координатах ShapeGeometry:', {
+                index: i,
+                value: array[i],
+                fullArray: array,
+                points
+                });
+                break;
+        }
+}   
                 
                 // Перемещаем в позицию игрока
                 this.visibilityMask.position.set(playerPos.x, 0.1, playerPos.z);
