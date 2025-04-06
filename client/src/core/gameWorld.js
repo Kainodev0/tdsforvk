@@ -59,13 +59,21 @@ export class GameWorld {
         if (this.player) {
             this.player.update(deltaTime);
         }
-        
+    
         // Обновление других сущностей
         this.entities.forEach(entity => {
             if (entity.update) {
                 entity.update(deltaTime);
             }
         });
+    
+        // 🔄 Обновление системы видимости
+        if (this.visionSystem && this.visionSystem.isReady()) {
+            this.visionSystem.update(
+                this.player.position,
+                this.player.rotation.y
+            );
+        }
     }
     
     /**
