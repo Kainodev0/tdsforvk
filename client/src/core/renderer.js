@@ -1,6 +1,6 @@
 // client/src/core/renderer.js
 import * as THREE from 'three'; // Убедитесь, что импорт Three.js есть
-import { GeometryValidator } from '../utils/geometry-validator.js'; // Путь может отличаться
+import { GeometryValidator } from '../utils/geometry-validator.js';
 
 /**
  * Класс отвечающий за рендеринг игры с использованием Three.js
@@ -21,6 +21,9 @@ export class Renderer {
         // Элементы для системы видимости
         this.visionSystem = null;
         this.temporaryObjects = []; // Временные объекты (лучи, эффекты)
+        
+        // Флаг для оптимизации валидации
+        this.needsValidation = true;
     }
 
     /**
@@ -62,21 +65,6 @@ export class Renderer {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
-    }
-    
-    /**
-     * Рендеринг сцены с предварительной валидацией геометрии
-     */
-    render() {
-        // Валидация сцены перед рендерингом
-        if (this.scene) {
-            GeometryValidator.validateScene(this.scene);
-        }
-        
-        // Обычный рендеринг
-        if (this.scene && this.camera) {
-            this.renderer.render(this.scene, this.camera);
-        }
     }
     
     /**
@@ -246,7 +234,10 @@ export class Renderer {
         playerMesh.add(weapon);
         
         this.scene.add(playerMesh);
-        
+    
+        // Устанавливаем флаг для валидации
+        this.needsValidation = true;
+    
         return playerMesh;
     }
     
@@ -288,23 +279,29 @@ export class Renderer {
     }
     
     /**
-     * Рендеринг сцены с учетом игрока
-     * @param {Object} player - объект игрока для системы видимости
-     */
+        * Рендеринг сцены с учетом игрока
+    * @param {Object} player - объект игрока для системы видимости
+    */
     render(player) {
-        if (!this.renderer || !this.scene || !this.camera) return;
-        
-        // Обновляем систему видимости, если она инициализирована и есть игрок
-        if (this.visionSystem && player) {
-            this.visionSystem.update();
-        }
-        
-        // Очищаем устаревшие временные объекты
-        this.cleanTemporaryObjects();
-        
-        // Рендерим сцену
-        this.renderer.render(this.scene, this.camera);
+    if (!this.renderer || !this.scene || !this.camera) return;
+    
+    // Валидация геометрии сцены только если необходимо
+    if (this.needsValidation) {
+        GeometryValidator.validateScene(this.scene);
+        this.needsValidation = false;
     }
+    
+    // Обновляем систему видимости, если она инициализирована и есть игрок
+    if (this.visionSystem && player) {
+        this.visionSystem.update();
+    }
+    
+    // Очищаем устаревшие временные объекты
+    this.cleanTemporaryObjects();
+    
+    // Рендерим сцену
+    this.renderer.render(this.scene, this.camera);
+}
     
     /**
      * Установка качества графики
@@ -367,7 +364,10 @@ export class Renderer {
         
         // Добавляем на сцену
         this.scene.add(itemMesh);
-        
+    
+        // Устанавливаем флаг для валидации
+        this.needsValidation = true;
+    
         return itemMesh;
     }
     
@@ -390,7 +390,10 @@ export class Renderer {
         npcMesh.receiveShadow = true;
         
         this.scene.add(npcMesh);
-        
+    
+        // Устанавливаем флаг для валидации
+        this.needsValidation = true;
+    
         return npcMesh;
     }
 }
